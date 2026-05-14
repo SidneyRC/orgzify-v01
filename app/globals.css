@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────
+   ORGZIFY — Global CSS
+   One source of truth for all CSS variables
+   ───────────────────────────────────────── */
+
+:root {
+  /* Brand */
+  --color-primary:       #1e3a8a;
+  --color-primary-hover: #1e40af;
+  --color-primary-light: #dbeafe;
+  --color-primary-muted: #bfdbfe;
+
+  --color-accent:        #facc15;
+  --color-accent-hover:  #eab308;
+  --color-accent-light:  #fef9c3;
+
+  /* Semantic */
+  --color-success:       #16a34a;
+  --color-success-bg:    #f0fdf4;
+  --color-success-border:#bbf7d0;
+  --color-success-text:  #15803d;
+
+  --color-error:         #dc2626;
+  --color-error-bg:      #fef2f2;
+  --color-error-border:  #fecaca;
+  --color-error-text:    #b91c1c;
+
+  --color-warning:       #d97706;
+  --color-warning-bg:    #fffbeb;
+  --color-warning-border:#fde68a;
+  --color-warning-text:  #92400e;
+
+  --color-info:          #0284c7;
+  --color-info-bg:       #f0f9ff;
+  --color-info-border:   #bae6fd;
+  --color-info-text:     #075985;
+
+  /* Surfaces */
+  --color-surface:       #ffffff;
+  --color-page-bg:       #f9fafb;
+  --color-border:        #f3f4f6;
+  --color-border-md:     #e5e7eb;
+
+  /* Typography */
+  --color-text-primary:  #111827;
+  --color-text-secondary:#6b7280;
+  --color-text-muted:    #9ca3af;
+
+  /* Shape */
+  --radius-input:        0.75rem;
+  --radius-card:         1rem;
+  --radius-card-lg:      1.25rem;
+
+  /* Shadow */
+  --shadow-card:         0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-focus:        0 0 0 3px rgb(30 58 138 / 0.15);
+
+  /* Transitions */
+  --transition-base:     150ms ease;
+  --transition-slow:     250ms ease;
+}
+
+/* ── Base Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  background-color: var(--color-page-bg);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ── Focus Ring — global consistent style ── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar — subtle ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-md); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* ── Page-specific font overrides ──
+   Import additional Google Fonts here for
+   pages that need a different typeface.
+   Example:
+   @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap");
+   Then use: font-family: 'Playfair Display', serif;
+   in that page's component — no global override needed.
+   ──────────────────────────────────────── */
