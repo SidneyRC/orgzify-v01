@@ -9,14 +9,14 @@ export async function GET(req: NextRequest) {
   // Get user info (zy_id)
   const { data: user } = await supabase
     .from('users')
-    .select('zy_id')
+    .select('zy_id, email')
     .eq('id', session.user_id)
     .single();
 
   // Get default profile (full name)
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, is_complete')
+    .select('full_name, is_complete, photo_url')
     .eq('id', session.profile_id)
     .single();
 
@@ -38,5 +38,7 @@ export async function GET(req: NextRequest) {
     is_complete: profile?.is_complete,
     academies: academies || [],
     organisations: organisations || [],
+email: user?.email,
+avatar: profile?.photo_url || null,
   });
 }

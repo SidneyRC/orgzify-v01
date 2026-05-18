@@ -11,7 +11,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 interface Academy { id: string; name: string; slug: string; status: string }
 interface Organisation { id: string; name: string; slug: string; status: string }
-interface User { name: string; email: string; avatar: string | null; academies: Academy[]; organisations: Organisation[] }
+interface User { name: string; email?: string; avatar?: string | null; academies: Academy[]; organisations: Organisation[] }
 
 export default function NavUserDropdown({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
