@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import Footer from "@/components/shared/OREV1-011-Footer";
 
 function validatePassword(pw: string): string[] {
   const e: string[] = [];
@@ -53,8 +54,14 @@ export default function RegisterStep3({ fullName, email }: Props) {
     if (!agreedToTerms) { setError("Please agree to the Terms of Service and Privacy Policy."); return; }
     setError(""); setLoading(true);
     // TODO: Call API to create account — payload: { fullName, email, password }
-    await new Promise(r => setTimeout(r, 1500));
-    setLoading(false);
+const res = await fetch('/register/complete', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ fullName, email, password }),
+});
+const data = await res.json();
+if (!res.ok) { setError(data.error || 'Unable to create an account!'); setLoading(false); return; }
+setLoading(false);
     toast.success("Account created successfully!");
     router.replace("/profile/edit"); // ✅ Redirect to Profile Edit
   };
@@ -139,6 +146,7 @@ export default function RegisterStep3({ fullName, email }: Props) {
         <p className="text-center text-sm text-gray-500">Already have an account?{" "}
           <Link href="/login" className="text-blue-900 font-semibold hover:underline">Sign In</Link>
         </p>
+        <Footer />
       </div>
     </>
   );

@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import LogoHeader from "@/components/shared/OREV1-012-LogoHeader";
 import Footer from "@/components/shared/OREV1-011-Footer";
-import toast from "react-hot-toast";
+import Navbar from "@/components/shared/OREV1-026-Navbar";
 
 type LoginMethod = "password" | "otp";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("password");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -23,68 +25,43 @@ export default function LoginPage() {
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
-    if (value && index < 5) {
-      document.getElementById(`otp-${index + 1}`)?.focus();
-    }
+    if (value && index < 5) document.getElementById(`otp-${index + 1}`)?.focus();
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
+    if (e.key === "Backspace" && !otp[index] && index > 0)
       document.getElementById(`otp-${index - 1}`)?.focus();
-    }
   };
 
   const handleSendOtp = async () => {
     if (!identifier) { setError("Please enter your email or mobile number."); return; }
-    setError("");
-    setLoading(true);
-    // DB Connection Pending — replace with POST /api/auth/send-otp
-    await new Promise((r) => setTimeout(r, 1000));
-    setOtpSent(true);
-    setLoading(false);
+    setError(""); setLoading(true);
+    await new Promise((r) => setTimeout(r, 1000)); // DB-pending — OTP login
+    setOtpSent(true); setLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
-    // DB Connection Pending — replace with POST /api/auth/login
-    await new Promise((r) => setTimeout(r, 1000));
+    setError(""); setLoading(true);
+    const res = await fetch('/login/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password }),
+    });
+    const data = await res.json();
     setLoading(false);
-    // On success → redirect to /select-profile
-  };
-
-  const handleSuccess = () => {
-    toast.success("Signed in successfully!");
-    setTimeout(() => window.location.href = "/", 2000);
-  };
-
-  const handleFailure = () => {
-    toast.error("Invalid credentials. Please try again.");
+    if (!res.ok) { setError(data.error || 'Something went wrong. Please try again.'); return; }
+    router.push(data.is_complete ? '/' : '/profile/edit');
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-
-      {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center">
-            <span className="text-yellow-400 font-bold text-sm">O</span>
-          </div>
-          <span className="text-blue-900 font-bold text-lg tracking-tight">Orgzify</span>
-        </Link>
-      </header>
+<Navbar />
 
       <main className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-
-            {/* Logo */}
-            <div className="mb-5">
-              <LogoHeader />
-            </div>
-
+            <div className="mb-5"><LogoHeader /></div>
             <div className="mb-7">
               <h1 className="text-2xl font-bold text-blue-900">Welcome</h1>
               <p className="text-gray-500 text-sm mt-1">Sign in to your Orgzify account</p>
@@ -109,7 +86,6 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* Divider */}
             <div className="flex items-center gap-3 mb-6">
               <div className="flex-1 h-px bg-gray-200" />
               <span className="text-xs text-gray-400 font-medium">OR</span>
@@ -118,39 +94,24 @@ export default function LoginPage() {
 
             {/* Toggle */}
             <div className="flex rounded-xl bg-gray-100 p-1 mb-6">
-              <button
-                type="button"
-                onClick={() => { setLoginMethod("password"); setError(""); setOtpSent(false); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${loginMethod === "password" ? "bg-white text-blue-900 shadow-sm" : "text-gray-500"}`}
-              >
+              <button type="button" onClick={() => { setLoginMethod("password"); setError(""); setOtpSent(false); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${loginMethod === "password" ? "bg-white text-blue-900 shadow-sm" : "text-gray-500"}`}>
                 Password
               </button>
-              <button
-                type="button"
-                onClick={() => { setLoginMethod("otp"); setError(""); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${loginMethod === "otp" ? "bg-white text-blue-900 shadow-sm" : "text-gray-500"}`}
-              >
+              <button type="button" onClick={() => { setLoginMethod("otp"); setError(""); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${loginMethod === "otp" ? "bg-white text-blue-900 shadow-sm" : "text-gray-500"}`}>
                 OTP
               </button>
             </div>
 
-            {error && (
-              <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
-                {error}
-              </div>
-            )}
+            {error && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">{error}</div>}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Username / Email / Mobile</label>
-                <input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Enter username, email or mobile"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:border-blue-900 transition-colors"
-                  required
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="Enter your email" required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:border-blue-900 transition-colors" />
               </div>
 
               {loginMethod === "password" && (
@@ -160,20 +121,14 @@ export default function LoginPage() {
                     <Link href="/forgot-password" className="text-xs text-blue-900 hover:underline font-medium">Forgot password?</Link>
                   </div>
                   <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-11 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:border-blue-900 transition-colors"
-                      required
-                    />
+                    <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password" required
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-11 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:border-blue-900 transition-colors" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {showPassword
                           ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>
-                        }
+                          : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>}
                       </svg>
                     </button>
                   </div>
@@ -191,7 +146,7 @@ export default function LoginPage() {
                     <div className="space-y-4">
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                         <p className="text-sm font-semibold text-amber-800">OTP sent to {identifier}</p>
-                        <p className="text-xs text-amber-700 mt-1">Can't find it? Check your <span className="font-semibold">Spam / Junk</span> folder and mark as Not Spam.</p>
+                        <p className="text-xs text-amber-700 mt-1">Can&apos;t find it? Check your <span className="font-semibold">Spam / Junk</span> folder.</p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-3">Enter 6-digit OTP</label>
@@ -200,8 +155,7 @@ export default function LoginPage() {
                             <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" maxLength={1} value={digit}
                               onChange={(e) => handleOtpChange(i, e.target.value)}
                               onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                              className="w-12 h-12 text-center text-lg font-bold border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20 transition-colors"
-                            />
+                              className="w-12 h-12 text-center text-lg font-bold border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20 transition-colors" />
                           ))}
                         </div>
                         <button type="button" onClick={handleSendOtp} className="mt-3 text-xs text-blue-900 hover:underline font-medium">Resend OTP</button>
@@ -219,38 +173,16 @@ export default function LoginPage() {
               )}
             </form>
 
-            {/* Terms — inside card */}
             <p className="text-center text-xs text-gray-400 mt-4">
               By signing in, you agree to our{" "}
               <Link href="/terms" className="hover:underline">Terms</Link>{" "}&{" "}
               <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
             </p>
-
             <p className="text-center text-sm text-gray-500 mt-4">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/register" className="text-blue-900 font-semibold hover:underline">Register</Link>
             </p>
-
-            {/* ── Section 2 — Simulation (DELETE ENTIRELY WHEN DB CONNECTED) ── */}
-            <div className="border-t-2 border-dashed border-gray-300 mt-6 pt-5 flex flex-col gap-2">
-              <p className="text-center text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">
-                Simulation — For Testing Only. Remove in Production.
-              </p>
-              <button onClick={handleSuccess}
-                className="w-full py-3 rounded-xl bg-green-600 text-white font-semibold text-sm hover:bg-green-700 transition-colors">
-                Simulate Success — Sign In
-              </button>
-              <button onClick={handleFailure}
-                className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm hover:bg-red-600 transition-colors">
-                Simulate Failure — Invalid Credentials
-              </button>
-              <p className="text-center text-xs text-gray-400 italic">DB Connection Pending — remove when connected</p>
-            </div>
-
-            <div className="mt-5">
-              <Footer />
-            </div>
-
+            <div className="mt-5"><Footer /></div>
           </div>
         </div>
       </main>

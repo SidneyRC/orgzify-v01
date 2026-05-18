@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import Footer from "@/components/shared/OREV1-011-Footer";
 
 type Title = "Mr." | "Mrs." | "Ms." | "Dr." | "Prof.";
 interface Props { onNext: (fullName: string, email: string) => void }
@@ -10,25 +12,36 @@ export default function RegisterStep1({ onNext }: Props) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const handleEmailBlur = async () => {
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) return;
+    setEmailError("");
+    const { data } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
+    if (data) setEmailError("This email is already registered. Sign in instead.");
+  };
 
   const handleContinue = async () => {
     if (!fullName.trim()) { setError("Please enter your full name."); return; }
     if (!email.trim()) { setError("Please enter your email address."); return; }
     if (!/\S+@\S+\.\S+/.test(email)) { setError("Please enter a valid email address."); return; }
+    if (emailError) return;
     setError(""); setLoading(true);
-    // TODO: Check if email already registered
-    await new Promise(r => setTimeout(r, 1000));
-    const alreadyRegistered = false; // TODO: replace with real API response
-    if (alreadyRegistered) { setError("An account with this email already exists. Please sign in."); setLoading(false); return; }
-    // TODO: Send OTP via Resend.com
-    await new Promise(r => setTimeout(r, 500));
+
+    const res = await fetch("/otp/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `${title} ${fullName}`, email }),
+    });
+
+    const result = await res.json();
+    if (!result.success) { setError(result.error ?? "Failed to send OTP. Please try again."); setLoading(false); return; }
     setLoading(false);
     onNext(`${title} ${fullName}`, email);
   };
 
   const handleOAuth = (provider: string) => {
-    // TODO: Initiate OAuth — skip OTP, go to Step 3
     console.log(`OAuth: ${provider}`);
   };
 
@@ -69,7 +82,6 @@ export default function RegisterStep1({ onNext }: Props) {
       {error && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">{error}</div>}
 
       <div className="space-y-4">
-        {/* Full Name — single field */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
           <div className="flex gap-2">
@@ -83,22 +95,27 @@ export default function RegisterStep1({ onNext }: Props) {
           </div>
         </div>
 
-        {/* Email */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+          <input type="email" value={email}
+            onChange={e => { setEmail(e.target.value); setEmailError(""); }}
+            onBlur={handleEmailBlur}
             onKeyDown={e => e.key === "Enter" && handleContinue()}
             placeholder="you@example.com"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:border-blue-900 transition-colors" />
+            className={`w-full border rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 transition-colors ${emailError ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-900"}`} />
+          {emailError && <p className="mt-1.5 text-xs text-red-500">{emailError} <Link href="/login" className="font-semibold underline">Sign in</Link></p>}
         </div>
 
-        <button onClick={handleContinue} disabled={loading}
+        <button onClick={handleContinue} disabled={loading || !!emailError}
           className="w-full bg-blue-900 text-white rounded-xl py-3.5 text-sm font-semibold hover:bg-blue-800 transition-colors disabled:opacity-50">
           {loading ? "Please wait..." : "Continue →"}
         </button>
+
         <p className="text-center text-sm text-gray-500">Already have an account?{" "}
           <Link href="/login" className="text-blue-900 font-semibold hover:underline">Sign In</Link>
         </p>
+
+        <Footer />
       </div>
     </>
   );

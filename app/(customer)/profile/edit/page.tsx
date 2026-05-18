@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
 import LogoHeader from "@/components/shared/OREV1-012-LogoHeader";
 import Footer from "@/components/shared/OREV1-011-Footer";
 import ProfileCompletionBar from "@/components/shared/OREV1-025-ProfileCompletionBar";
@@ -49,6 +49,27 @@ export default function ProfileEditPage() {
   const [loading, setLoading]         = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+useEffect(() => {
+  fetch('/profile/api')
+    .then(r => r.json())
+    .then(({ profile }) => {
+      if (!profile) return;
+      setFullName(profile.full_name || '');
+      setMobile(profile.mobile || '');
+      setWhatsappNumber(profile.whatsapp_number || '');
+      setDob(profile.dob || '');
+      setGender(profile.gender || '');
+      setStatus(profile.current_status || '');
+      setFollowUp(profile.current_status_detail || '');
+      setCity(profile.city || '');
+      setPincode(profile.pincode || '');
+      setAnniversary(profile.anniversary_date || '');
+      setAbout(profile.about || '');
+      setInterests(profile.area_of_interest ? JSON.parse(profile.area_of_interest) : []);
+    })
+    .catch(console.error);
+}, []);
+
   const selectedStatus = STATUS_OPTIONS.find((s) => s.value === status);
   const completion = Math.round(
     ([photo, fullName, mobile, dob, gender, status, city, interests.length > 0 ? "y" : ""].filter(Boolean).length / 8) * 100
@@ -77,10 +98,24 @@ export default function ProfileEditPage() {
     if (interests.length === 0) return showToast("error", "Please select at least one Area of Interest.");
     if (!city.trim())           return showToast("error", "City is required.");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200)); // DB-pending — replace with API call
-    setLoading(false);
-    showToast("success", "Profile saved successfully!");      // FIX: correct toast message
-    setTimeout(() => router.push("/"), 1500);                // FIX: redirect to home after save
+    
+const res = await fetch('/profile/api', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    full_name: fullName, mobile, whatsapp,
+    whatsapp_number: whatsappNumber, dob, gender,
+    current_status: status, current_status_detail: followUp,
+    city, pincode, anniversary_date: anniversary,
+    area_of_interest: interests, about,
+  }),
+});
+const data = await res.json();
+if (!res.ok) { setLoading(false); showToast("error", data.error || "Failed to save profile. Please try again."); return; }
+setLoading(false);
+showToast("success", "Profile saved successfully!");
+setTimeout(() => router.push("/"), 1500);
+
   };
 
   // ── Simulation handlers — always call main functions (Section 2) ──────────
