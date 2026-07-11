@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Navbar from "@/components/shared/OREV1-026-Navbar"
 import CategorySection from "@/components/CategorySection";
+import Navbar from "@/components/shared/OREV1-026-Navbar";
 
 const BASE_URL = "https://www.orgzify.com";
 
@@ -53,14 +53,13 @@ export default function Home() {
   return (
     <>
       {/* JSON-LD for this page */}
+      <Navbar />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppJsonLd) }}
       />
 
       <div className="min-h-screen bg-white flex flex-col">
-
-      <Navbar />
 
         {/* Hero */}
         <section className="bg-gradient-to-br from-blue-900 to-blue-700 text-white text-center px-6 py-10 md:py-16">

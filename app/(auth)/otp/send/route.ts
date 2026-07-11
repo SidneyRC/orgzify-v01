@@ -1,30 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { sendEmail } from '@/lib/sendEmail';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email } = await req.json();
+    const { name, email, purpose = 'registration' } = await req.json();
 
     if (!name || !email) {
       return NextResponse.json({ success: false, error: 'Name and email are required.' }, { status: 400 });
     }
 
-    // Generate 6 digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const cleanEmail = email.toLowerCase().trim();
 
-    // OTP expires in 10 minutes
+    // ── Purpose-based email existence check ────────────────────────────────
+    const { data: existingUser } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('email', cleanEmail)
+      .maybeSingle();
+
+    if (purpose === 'registration' && existingUser) {
+      return NextResponse.json({ success: false, error: 'This email is already registered. Please sign in instead.' }, { status: 409 });
+    }
+
+    if ((purpose === 'forgot-password' || purpose === 'account-locked') && !existingUser) {
+      return NextResponse.json({ success: false, error: 'No account found with this email address.' }, { status: 404 });
+    }
+
+    // ── Mark all previous unused OTPs for same email + purpose as used ─────
+    await supabaseAdmin
+      .from('otp_logs')
+      .update({ is_used: true })
+      .eq('email', cleanEmail)
+      .eq('purpose', purpose)
+      .eq('is_used', false);
+
+    // ── Generate new OTP ───────────────────────────────────────────────────
+    const otp       = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const ip        = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown';
 
-    // Get IP address
-    const ip = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown';
-
-    // Save OTP to Supabase
-    const { error: dbError } = await supabase.from('otp_logs').insert({
-      email,
-      otp_code: otp,
-      purpose: 'registration',
-      is_used: false,
+    // ── Save OTP to otp_logs ───────────────────────────────────────────────
+    const { error: dbError } = await supabaseAdmin.from('otp_logs').insert({
+      email:      cleanEmail,
+      otp_code:   otp,
+      purpose,
+      is_used:    false,
       expires_at: expiresAt,
       ip_address: ip,
     });
@@ -34,9 +55,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Failed to save OTP.' }, { status: 500 });
     }
 
-    // Send email via ZeptoMail
-    const emailSent = await sendEmail({ to: email, name, otp, purpose: 'registration' });
-
+    // ── Send email ─────────────────────────────────────────────────────────
+    const emailSent = await sendEmail({ to: cleanEmail, name, otp, purpose });
     if (!emailSent) {
       return NextResponse.json({ success: false, error: 'Failed to send OTP email.' }, { status: 500 });
     }

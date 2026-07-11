@@ -1,49 +1,51 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import Footer from "@/components/shared/OREV1-011-Footer";
 
 type Title = "Mr." | "Mrs." | "Ms." | "Dr." | "Prof.";
-interface Props { onNext: (fullName: string, email: string) => void }
+interface Props { onNext: (title: string, fullName: string, email: string) => void }
 
 export default function RegisterStep1({ onNext }: Props) {
-  const [title, setTitle] = useState<Title>("Mr.");
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
+  const [title,      setTitle]      = useState<Title>("Mr.");
+  const [fullName,   setFullName]   = useState("");
+  const [email,      setEmail]      = useState("");
+  const [error,      setError]      = useState("");
   const [emailError, setEmailError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading,    setLoading]    = useState(false);
 
   const handleEmailBlur = async () => {
     if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) return;
     setEmailError("");
-    const { data } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
-    if (data) setEmailError("This email is already registered. Sign in instead.");
+    try {
+      const res  = await fetch(`/check?type=email&value=${encodeURIComponent(email.trim().toLowerCase())}`);
+      const data = await res.json();
+      if (data.exists) setEmailError("This email is already registered. Sign in instead.");
+    } catch {
+      // silent — don't block registration if check fails
+    }
   };
 
   const handleContinue = async () => {
     if (!fullName.trim()) { setError("Please enter your full name."); return; }
-    if (!email.trim()) { setError("Please enter your email address."); return; }
+    if (!email.trim())    { setError("Please enter your email address."); return; }
     if (!/\S+@\S+\.\S+/.test(email)) { setError("Please enter a valid email address."); return; }
     if (emailError) return;
     setError(""); setLoading(true);
 
     const res = await fetch("/otp/send", {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: `${title} ${fullName}`, email }),
+      body:    JSON.stringify({ name: `${title} ${fullName}`, email, purpose: "registration" }),
     });
 
     const result = await res.json();
     if (!result.success) { setError(result.error ?? "Failed to send OTP. Please try again."); setLoading(false); return; }
     setLoading(false);
-    onNext(`${title} ${fullName}`, email);
+    onNext(title, fullName, email);
   };
 
-  const handleOAuth = (provider: string) => {
-    console.log(`OAuth: ${provider}`);
-  };
+  const handleOAuth = (provider: string) => { console.log(`OAuth: ${provider}`); };
 
   return (
     <>
@@ -102,8 +104,13 @@ export default function RegisterStep1({ onNext }: Props) {
             onBlur={handleEmailBlur}
             onKeyDown={e => e.key === "Enter" && handleContinue()}
             placeholder="you@example.com"
-            className={`w-full border rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 transition-colors ${emailError ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-900"}`} />
-          {emailError && <p className="mt-1.5 text-xs text-red-500">{emailError} <Link href="/login" className="font-semibold underline">Sign in</Link></p>}
+            className={`w-full border rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 transition-colors ${
+              emailError ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-900"}`} />
+          {emailError && (
+            <p className="mt-1.5 text-xs text-red-500">
+              {emailError} <Link href="/login" className="font-semibold underline">Sign in</Link>
+            </p>
+          )}
         </div>
 
         <button onClick={handleContinue} disabled={loading || !!emailError}

@@ -8,7 +8,7 @@ export async function getSession(req: NextRequest) {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    return payload as { user_id: string; profile_id: string };
+    return payload as { user_id: string; profile_id: string; is_super_admin?: boolean };
   } catch {
     return null;
   }

@@ -1,16 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import LogoHeader from "@/components/shared/OREV1-012-LogoHeader";
-import Footer from "@/components/shared/OREV1-011-Footer";
-import Navbar from "@/components/shared/OREV1-026-Navbar";
 
 type LoginMethod = "password" | "otp";
 
+function ResendTimer({ onResend }: { onResend: () => void }) {
+  const [seconds, setSeconds] = useState(60);
+  const [canResend, setCanResend] = useState(false);
+
+  useEffect(() => {
+    if (seconds <= 0) { setCanResend(true); return; }
+    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [seconds]);
+
+  const handleResend = () => {
+    setSeconds(60);
+    setCanResend(false);
+    onResend();
+  };
+
+  return canResend ? (
+    <button type="button" onClick={handleResend} className="text-xs text-blue-900 hover:underline font-medium">
+      Resend OTP
+    </button>
+  ) : (
+    <p className="text-xs text-gray-400">Resend OTP in <span className="font-semibold text-gray-600">{seconds}s</span></p>
+  );
+}
+
 export default function LoginPage() {
-  const router = useRouter();
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("password");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -19,49 +39,85 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleOtpChange = (index: number, value: string) => {
     if (!/^\d?$/.test(value)) return;
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
-    if (value && index < 5) document.getElementById(`otp-${index + 1}`)?.focus();
+    if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !otp[index] && index > 0)
-      document.getElementById(`otp-${index - 1}`)?.focus();
+      inputRefs.current[index - 1]?.focus();
+  };
+
+  const submitOtp = async (otpCode: string) => {
+    if (!identifier) { setError("Please enter your email."); return; }
+    setError(""); setLoading(true);
+    const res = await fetch('/otp/login-otp/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: identifier, otp: otpCode }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error || 'Invalid OTP. Please try again.'); return; }
+    const next = new URLSearchParams(window.location.search).get('next');
+    window.location.href = next ? decodeURIComponent(next) : (data.is_complete ? '/' : '/profile/edit');
+  };
+
+  const handleOtpPaste = async (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length !== 6) return;
+    const newOtp = pasted.split('');
+    setOtp(newOtp);
+    inputRefs.current[5]?.focus();
+    await submitOtp(pasted);
   };
 
   const handleSendOtp = async () => {
-    if (!identifier) { setError("Please enter your email or mobile number."); return; }
+    if (!identifier) { setError("Please enter your email."); return; }
     setError(""); setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000)); // DB-pending — OTP login
-    setOtpSent(true); setLoading(false);
+    const res = await fetch('/otp/login-otp/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: identifier }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error || 'Failed to send OTP. Please try again.'); return; }
+    setOtp(["", "", "", "", "", ""]);
+    setOtpSent(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(""); setLoading(true);
-    const res = await fetch('/login/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setError(data.error || 'Something went wrong. Please try again.'); return; }
-    router.push(data.is_complete ? '/' : '/profile/edit');
+    if (loginMethod === 'password') {
+      const res = await fetch('/login/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.error || 'Something went wrong. Please try again.'); return; }
+      const next = new URLSearchParams(window.location.search).get('next');
+      window.location.href = next ? decodeURIComponent(next) : (data.is_complete ? '/' : '/profile/edit');
+    } else {
+      await submitOtp(otp.join(''));
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-<Navbar />
-
       <main className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <div className="mb-5"><LogoHeader /></div>
             <div className="mb-7">
               <h1 className="text-2xl font-bold text-blue-900">Welcome</h1>
               <p className="text-gray-500 text-sm mt-1">Sign in to your Orgzify account</p>
@@ -92,7 +148,6 @@ export default function LoginPage() {
               <div className="flex-1 h-px bg-gray-200" />
             </div>
 
-            {/* Toggle */}
             <div className="flex rounded-xl bg-gray-100 p-1 mb-6">
               <button type="button" onClick={() => { setLoginMethod("password"); setError(""); setOtpSent(false); }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${loginMethod === "password" ? "bg-white text-blue-900 shadow-sm" : "text-gray-500"}`}>
@@ -152,13 +207,18 @@ export default function LoginPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-3">Enter 6-digit OTP</label>
                         <div className="flex gap-2 justify-between">
                           {otp.map((digit, i) => (
-                            <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" maxLength={1} value={digit}
+                            <input key={i}
+                              ref={el => { inputRefs.current[i] = el; }}
+                              type="text" inputMode="numeric" maxLength={1} value={digit}
                               onChange={(e) => handleOtpChange(i, e.target.value)}
                               onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                              onPaste={handleOtpPaste}
                               className="w-12 h-12 text-center text-lg font-bold border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20 transition-colors" />
                           ))}
                         </div>
-                        <button type="button" onClick={handleSendOtp} className="mt-3 text-xs text-blue-900 hover:underline font-medium">Resend OTP</button>
+                        <div className="mt-3">
+                          <ResendTimer onResend={handleSendOtp} />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -182,7 +242,6 @@ export default function LoginPage() {
               Don&apos;t have an account?{" "}
               <Link href="/register" className="text-blue-900 font-semibold hover:underline">Register</Link>
             </p>
-            <div className="mt-5"><Footer /></div>
           </div>
         </div>
       </main>

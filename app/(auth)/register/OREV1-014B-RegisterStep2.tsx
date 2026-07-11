@@ -72,7 +72,7 @@ export default function RegisterStep2({ name, email, onNext, onBack }: Props) {
     await fetch("/otp/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email }),
+      body: JSON.stringify({ name, email, purpose: 'registration' }),
     });
     setLoading(false); setOtpExpiry(OTP_EXPIRY); setResendCooldown(RESEND_COOLDOWN); setOtpError("");
     refs.current[0]?.focus();

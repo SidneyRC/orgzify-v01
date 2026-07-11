@@ -22,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
+        
         {children}
         <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
       </body>

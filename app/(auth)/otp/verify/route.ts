@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, otp } = await req.json();
+    const { email, otp, purpose = 'registration' } = await req.json();
 
     if (!email || !otp) {
       return NextResponse.json({ success: false, error: 'Email and OTP are required.' }, { status: 400 });
     }
 
-    // Find matching valid OTP in otp_logs
-    const { data, error } = await supabase
+    // ── Find matching valid OTP ────────────────────────────────────────────
+    const { data, error } = await supabaseAdmin
       .from('otp_logs')
       .select('id, expires_at, is_used')
-      .eq('email', email)
+      .eq('email', email.toLowerCase().trim())
       .eq('otp_code', otp)
-      .eq('purpose', 'registration')
+      .eq('purpose', purpose)
       .eq('is_used', false)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -25,13 +25,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid OTP.' }, { status: 400 });
     }
 
-    // Check if expired
+    // ── Check expiry ───────────────────────────────────────────────────────
     if (new Date(data.expires_at) < new Date()) {
       return NextResponse.json({ success: false, error: 'OTP has expired. Please resend.' }, { status: 400 });
     }
 
-    // Mark OTP as used
-    await supabase.from('otp_logs').update({ is_used: true }).eq('id', data.id);
+    // ── Mark OTP as used ──────────────────────────────────────────────────
+    await supabaseAdmin.from('otp_logs').update({ is_used: true }).eq('id', data.id);
 
     return NextResponse.json({ success: true, message: 'OTP verified successfully.' });
 

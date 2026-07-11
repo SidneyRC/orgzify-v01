@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     // Find user by email
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id, email, password_hash, account_status, is_email_verified')
+      .select('id, email, password_hash, account_status, is_email_verified, is_super_admin')
       .eq('email', identifier.toLowerCase().trim())
       .single();
 
@@ -40,29 +40,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Get default profile
+    // Get default profile (includes full_name for display cookie)
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, is_complete')
+      .select('id, is_complete, full_name, photo_url')
       .eq('user_id', user.id)
       .eq('relationship', 'Self')
       .single();
 
     // Generate JWT token
-    const token = await new SignJWT({ user_id: user.id, profile_id: profile?.id })
+    const token = await new SignJWT({ user_id: user.id, profile_id: profile?.id, is_super_admin: user.is_super_admin ?? false })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime('7d')
       .sign(JWT_SECRET);
 
-    // Set cookie and return
-    const response = NextResponse.json({ success: true, is_complete: profile?.is_complete ?? false });
-    response.cookies.set('orgzify_token', token, {
-      httpOnly: true,
+    // Extract first name for display cookie
+    const parts = profile?.full_name?.split(' ') ?? [];
+const firstName = parts.find((p: string) => !p.endsWith('.')) ?? parts[0] ?? '';
+    const avatar = profile?.photo_url ?? '';
+
+    const cookieOptions = {
+      httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'lax' as const,
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
-    });
+    };
+
+    // Set auth token + display cookie
+    const response = NextResponse.json({ success: true, is_complete: profile?.is_complete ?? false });
+    response.cookies.set('orgzify_token', token, { ...cookieOptions, httpOnly: true });
+    response.cookies.set('zy_display', firstName, cookieOptions);
+    response.cookies.set('zy_avatar', avatar, cookieOptions);
 
     return response;
 

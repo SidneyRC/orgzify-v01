@@ -1,4 +1,5 @@
-export function registrationOTPEmail(name: string, otp: string): string {
+export function registrationOTPEmail(name: string, otp: string, message?: string): string {
+  const bodyText = message ?? "You're almost there! Use your verification code below to complete your registration on Orgzify.";
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -7,8 +8,6 @@ export function registrationOTPEmail(name: string, otp: string): string {
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;padding:32px 0;">
     <tr><td align="center">
       <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e5e5;">
-
-        <!-- Header -->
         <tr>
           <td style="background:linear-gradient(135deg,#7F77DD 0%,#534AB7 100%);padding:24px 32px;">
             <table cellpadding="0" cellspacing="0">
@@ -23,18 +22,12 @@ export function registrationOTPEmail(name: string, otp: string): string {
             </table>
           </td>
         </tr>
-
-        <!-- Greeting -->
         <tr>
           <td style="padding:32px 32px 8px;">
             <p style="font-size:24px;font-weight:bold;color:#1a1a1a;margin:0 0 8px;">Hi ${name},</p>
-            <p style="font-size:14px;color:#666666;line-height:1.7;margin:0;">
-              You're almost there! Use your verification code below to complete your registration on Orgzify.
-            </p>
+            <p style="font-size:14px;color:#666666;line-height:1.7;margin:0;">${bodyText}</p>
           </td>
         </tr>
-
-        <!-- OTP Box -->
         <tr>
           <td style="padding:24px 32px;">
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;border-radius:12px;border:1px solid #e5e5e5;">
@@ -52,8 +45,6 @@ export function registrationOTPEmail(name: string, otp: string): string {
             </table>
           </td>
         </tr>
-
-        <!-- Warning -->
         <tr>
           <td style="padding:0 32px 24px;">
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAEEDA;border-radius:8px;border-left:3px solid #BA7517;">
@@ -65,8 +56,6 @@ export function registrationOTPEmail(name: string, otp: string): string {
             </table>
           </td>
         </tr>
-
-        <!-- Didn't request -->
         <tr>
           <td style="padding:0 32px 24px;">
             <p style="font-size:13px;color:#999999;line-height:1.7;margin:0;">
@@ -75,8 +64,6 @@ export function registrationOTPEmail(name: string, otp: string): string {
             </p>
           </td>
         </tr>
-
-        <!-- Footer -->
         <tr>
           <td style="border-top:1px solid #eeeeee;padding:20px 32px;text-align:center;">
             <p style="font-size:11px;color:#aaaaaa;margin:0;">
@@ -84,7 +71,6 @@ export function registrationOTPEmail(name: string, otp: string): string {
             </p>
           </td>
         </tr>
-
       </table>
     </td></tr>
   </table>

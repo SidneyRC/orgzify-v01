@@ -14,7 +14,14 @@ export async function GET(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-  return NextResponse.json({ profile: data });
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('zy_id, email')
+    .eq('id', session.user_id)
+    .single();
+
+  return NextResponse.json({ profile: { ...data, zy_id: userData?.zy_id, email: userData?.email } });
 }
 
 // PUT — Save profile data
@@ -23,10 +30,24 @@ export async function PUT(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const {
-    full_name, mobile, whatsapp, whatsapp_number,
+    title, full_name, mobile, whatsapp, whatsapp_number,
     dob, gender, current_status, current_status_detail,
-    city, pincode, anniversary_date, area_of_interest, about,
+    city, pincode, anniversary_date, area_of_interest, about, photo_url,
   } = await req.json();
+
+  // ── Mobile duplicate check ─────────────────────────────────────────────────
+  if (mobile) {
+    const { data: existingMobile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('mobile', mobile.trim())
+      .neq('id', session.profile_id)
+      .maybeSingle();
+
+    if (existingMobile) {
+      return NextResponse.json({ error: 'This mobile number is already linked to another account.' }, { status: 409 });
+    }
+  }
 
   // WhatsApp logic — if same as mobile, copy mobile number
   const wa_number = whatsapp ? mobile : whatsapp_number;
@@ -40,6 +61,7 @@ export async function PUT(req: NextRequest) {
   const { error } = await supabase
     .from('profiles')
     .update({
+      title,
       full_name,
       mobile,
       whatsapp_number: wa_number,
@@ -49,9 +71,10 @@ export async function PUT(req: NextRequest) {
       current_status_detail,
       city,
       pincode,
-      anniversary_date: anniversary_date || null,
-      area_of_interest: JSON.stringify(area_of_interest),
+      anniversary_date:  anniversary_date || null,
+      area_of_interest:  JSON.stringify(area_of_interest),
       about,
+      photo_url,
       is_complete,
       updated_at: new Date().toISOString(),
     })
@@ -62,5 +85,9 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to save profile.' }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, is_complete });
+  const parts     = (full_name ?? '').split(' ');
+  const firstName = parts.find((p: string) => !p.endsWith('.')) ?? parts[0] ?? '';
+  const response  = NextResponse.json({ success: true, is_complete });
+  response.cookies.set('zy_display', firstName, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
+  return response;
 }
