@@ -41,9 +41,15 @@ async function getAssignRoleStats() {
   return { companies, assigned: (data || []).length };
 }
 
+async function getPolicyStats() {
+  const { data } = await supabaseAdmin.from("policies").select("country_id").eq("status", "active");
+  const countries = new Set((data || []).filter((r: any) => !!r.country_id).map((r: any) => r.country_id)).size;
+  return { countries, active: (data || []).length };
+}
+
 export default async function AdminSetupPage() {
-  const [theme, companyCount, geofenceStats, roleCount, assignStats] = await Promise.all([
-    getTheme(), getCompanyCount(), getGeofenceStats(), getRoleStats(), getAssignRoleStats()
+  const [theme, companyCount, geofenceStats, roleCount, assignStats, policyStats] = await Promise.all([
+    getTheme(), getCompanyCount(), getGeofenceStats(), getRoleStats(), getAssignRoleStats(), getPolicyStats()
   ]);
   const radius = theme?.global_border_radius || "12px";
   const textPrimary = theme?.color_text_primary || "#111827";
@@ -74,11 +80,17 @@ export default async function AdminSetupPage() {
       href: "/admin/setup/assign-role", meta: `Companies: ${assignStats.companies} | Assigned: ${assignStats.assigned}`,
       badge: assignStats.assigned > 0 ? "Active" : "Not set up",
       badgeColor: assignStats.assigned > 0 ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500", icon: "🧑‍💼",
-    },
+  },
     {
       title: "Themes", description: "Manage brand colour themes",
       href: "/admin/setup/themes", meta: "Platform wide",
       badge: "Active", badgeColor: "bg-green-100 text-green-700", icon: "🎨",
+    },
+    {
+      title: "Policies", description: "Terms & Conditions, Privacy Policy and more",
+      href: "/admin/setup/policies", meta: `Country : ${policyStats.countries} | Policy : ${policyStats.active}`,
+      badge: policyStats.active > 0 ? "Active" : "Not set up",
+      badgeColor: policyStats.active > 0 ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500", icon: "📜",
     },
   ];
 

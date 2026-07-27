@@ -28,13 +28,6 @@ export async function middleware(req: NextRequest) {
       // Pass display name via header
       if (displayCookie) res.headers.set('x-zy-display', displayCookie);
 
-      // /admin → super admin only
-      if (pathname.startsWith('/admin') && !payload.is_super_admin) {
-        const url = new URL('/profiles', req.url);
-        url.searchParams.set('error', 'unauthorised');
-        return NextResponse.redirect(url);
-      }
-
     } catch {
       // Invalid token — clear cookies + redirect to login
       const url = new URL('/login', req.url);

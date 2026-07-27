@@ -18,6 +18,7 @@ type UserData = {
   name: string; email: string; avatar: string;
   is_super_admin: boolean;
   companies: { id: string; display_name: string; slug: string; company_status: string }[];
+  entities: { id: string; process_id: string; display_name: string; status: string }[];
 }
 
 function useCarousel(cardsPerSlide: number) {
@@ -67,7 +68,7 @@ function AdminTopBar({ initialName, initialAvatar, onHamburgerClick, onCompanySe
 }) {
   const [userData, setUserData] = useState<UserData>({
     name: initialName, email: '', avatar: initialAvatar,
-    is_super_admin: false, companies: [],
+    is_super_admin: false, companies: [], entities: [],
   });
   const carousel = useCarousel(CARDS_PER_SLIDE);
 
@@ -84,6 +85,7 @@ function AdminTopBar({ initialName, initialAvatar, onHamburgerClick, onCompanySe
           avatar: p.photo_url ?? '',
           is_super_admin: p.is_super_admin ?? false,
           companies: p.companies ?? [],
+          entities: p.entities ?? [],
         });
       });
   }, []);
@@ -103,7 +105,7 @@ function AdminTopBar({ initialName, initialAvatar, onHamburgerClick, onCompanySe
       </div>
       <div className="flex-1 md:hidden" />
       <NavUserDropdown
-        user={{ name: userData.name, email: userData.email, avatar: userData.avatar, is_super_admin: userData.is_super_admin, companies: userData.companies }}
+        user={{ name: userData.name, email: userData.email, avatar: userData.avatar, is_super_admin: userData.is_super_admin, companies: userData.companies, entities: userData.entities }}
         onLogout={handleLogout}
         onCompanySelect={onCompanySelect}
       />

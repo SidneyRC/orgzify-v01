@@ -19,14 +19,14 @@ export default function CompanySetupPage() {
   const [cards, setCards] = useState<CardsData>({})
 
   useEffect(() => {
-    fetch(`/company/${slug}/access`).then(r => r.json()).then(json => {
+    fetch(`/company/access`).then(r => r.json()).then(json => {
       const loginUrl = `/login?next=${encodeURIComponent(`/company/${slug}/setup`)}`
       if (!json.allowed) {
         if (json.reason === 'wrong_user') { window.location.href = `/logout?next=${encodeURIComponent(loginUrl)}`; return }
         router.push(loginUrl); return
       }
       setInfo(json)
-      fetch(`/company/${slug}/setup/api`).then(r => r.json()).then(data => {
+      fetch(`/company/setup/api`).then(r => r.json()).then(data => {
         setCards(data.cards || {})
         setState('ready')
       })

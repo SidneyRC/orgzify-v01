@@ -16,7 +16,7 @@ export default function CompanyDashboardPage() {
   const [info, setInfo] = useState<AccessInfo | null>(null)
 
   useEffect(() => {
-    fetch(`/company/${slug}/access`).then(r => r.json()).then(json => {
+    fetch(`/company/access`).then(r => r.json()).then(json => {
       const loginUrl = `/login?next=${encodeURIComponent(`/company/${slug}/dashboard`)}`
       if (json.allowed) { setInfo(json); setState('ready'); return }
       if (json.reason === 'wrong_user') { window.location.href = `/logout?next=${encodeURIComponent(loginUrl)}`; return }

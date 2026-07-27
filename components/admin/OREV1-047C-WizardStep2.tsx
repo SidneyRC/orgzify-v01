@@ -23,8 +23,8 @@ export default function OREV1047CWizardStep2({ data, onNext, onSaveDraft, onBack
     data.admin_user_id ? { id: data.admin_user_id, full_name: data.admin_user_name } : null
   )
   const [inviteName, setInviteName] = useState(data.admin_invite_name || '')
-  useEffect(() => {
-  if (data.admin_email) { setEmail(data.admin_email); setCheckState(data.admin_user_id ? 'found' : 'not_found'); if (data.admin_user_id) setFoundUser({ id: data.admin_user_id, full_name: data.admin_user_name }) }
+ useEffect(() => {
+  if (data.admin_email) { setEmail(data.admin_email); setCheckState(data.admin_user_id ? 'found' : 'not_found'); if (data.admin_user_id) setFoundUser({ id: data.admin_user_id, full_name: data.admin_user_name }); setError('') }
 }, [data.admin_email, data.admin_user_id])
   const [error, setError] = useState('')
 

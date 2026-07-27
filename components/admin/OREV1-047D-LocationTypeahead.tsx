@@ -13,12 +13,15 @@ type Props = {
   onChange: (val: { id: string; name: string } | null) => void
   error?: string
   required?: boolean
+  apiBase?: string
+  placeholder?: string
 }
 
-const API = '/admin/setup/companies/new/api'
+const DEFAULT_API = '/admin/shared/address/api'
 
-export default function OREV1047DLocationTypeahead({ label, level, parent_id, country_id, value, onChange, error, required }: Props) {
+export default function OREV1047DLocationTypeahead({ label, level, parent_id, country_id, value, onChange, error, required, apiBase, placeholder }: Props) {
   const { theme } = useTheme()
+  const API = apiBase || DEFAULT_API
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${error ? '#ef4444' : theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const dropStyle = { backgroundColor: theme?.dropdown_bg || '#fff', border: `1px solid ${theme?.dropdown_border || '#e5e7eb'}`, borderRadius: radius }
@@ -81,7 +84,7 @@ export default function OREV1047DLocationTypeahead({ label, level, parent_id, co
           value={query}
           onChange={e => search(e.target.value)}
           onFocus={() => { if (query.length > 0 && results.length > 0) setOpen(true) }}
-          placeholder={`Search ${label.toLowerCase()}`}
+          placeholder={placeholder || `Search ${label.toLowerCase()}`}
           className="w-full h-10 px-3 text-sm focus:outline-none"
           style={inputStyle}
         />

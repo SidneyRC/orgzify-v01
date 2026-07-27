@@ -1,8 +1,17 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import BusinessProfileList, { Company, Entity } from "@/components/shared/OREV1-073-BusinessProfileList";
 
-interface Props { isLoggedIn: boolean; userName?: string; onHostEvent: () => void }
+interface Props {
+  isLoggedIn: boolean;
+  userName?: string;
+  onHostEvent: () => void;
+  companies?: Company[];
+  entities?: Entity[];
+  isSuperAdmin?: boolean;
+}
 
 function NavItem({ href, label, icon, onClick, danger = false }: { href: string; label: string; icon: string; onClick?: () => void; danger?: boolean }) {
   return (
@@ -14,8 +23,10 @@ function NavItem({ href, label, icon, onClick, danger = false }: { href: string;
   );
 }
 
-export default function NavMobile({ isLoggedIn, userName, onHostEvent }: Props) {
+export default function NavMobile({ isLoggedIn, userName, onHostEvent, companies, entities, isSuperAdmin }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  const goBusiness = (path: string) => { setMenuOpen(false); router.push(path); };
 
   return (
     <>
@@ -71,6 +82,12 @@ export default function NavMobile({ isLoggedIn, userName, onHostEvent }: Props) 
                     className="flex items-center gap-3 px-5 py-4 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-900 transition">
                     <span className="text-base w-5 text-center">🎯</span> Host Event
                   </button>
+                  <BusinessProfileList
+                    companies={companies ?? []}
+                    entities={entities ?? []}
+                    isSuperAdmin={isSuperAdmin ?? false}
+                    onNavigate={goBusiness}
+                  />
                   <NavItem href="/events" label="Browse Events" icon="🏆" onClick={() => setMenuOpen(false)} />
                   <NavItem href="/auth/change-password" label="Change Password" icon="🔐" onClick={() => setMenuOpen(false)} />
                   <NavItem href="/" label="Logout" icon="🚪" onClick={() => setMenuOpen(false)} danger />

@@ -76,12 +76,16 @@ export default function OREV1047CompaniesPage({ ownCompanyId = null, backLink = 
     loadDrafts()
   }, [])
 
-  const loadDrafts = async () => {
+const loadDrafts = async () => {
     setLoading(true)
-    const draftParams = new URLSearchParams({ status: 'draft', page: '1', limit: '20' })
-    const res = await fetch(`/admin/setup/companies/api?${draftParams}`)
-    const json = await res.json()
-    if (!json.error) { setRows(json.data || []); setTotal(json.total || 0) }
+    const [draftRes, pendingRes] = await Promise.all([
+      fetch(`/admin/setup/companies/api?${new URLSearchParams({ status: 'draft', page: '1', limit: '20' })}`),
+      fetch(`/admin/setup/companies/api?${new URLSearchParams({ status: 'pending', page: '1', limit: '20' })}`)
+    ])
+    const [draftJson, pendingJson] = await Promise.all([draftRes.json(), pendingRes.json()])
+    const combined = [...(draftJson.data || []), ...(pendingJson.data || [])]
+    setRows(combined)
+    setTotal((draftJson.total || 0) + (pendingJson.total || 0))
     setLoading(false)
   }
 

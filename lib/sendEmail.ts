@@ -8,7 +8,8 @@ type EmailPurpose =
   | 'otp-login'
   | 'booking'
   | 'cancellation'
-  | 'reschedule';
+  | 'reschedule'
+  | 'entity-verification';
 
 interface SendEmailOptions {
   to: string;
@@ -25,6 +26,7 @@ const AGENT_CONFIG: Record<EmailPurpose, { subject: string; passKey: string }> =
   'booking': { subject: 'Your Booking Confirmation', passKey: process.env.ZEPTO_PASS_BOOKING ?? '' },
   'cancellation': { subject: 'Your Booking Cancellation', passKey: process.env.ZEPTO_PASS_CANCELLATION ?? '' },
   'reschedule': { subject: 'Your Booking Rescheduled', passKey: process.env.ZEPTO_PASS_RESCHEDULE ?? '' },
+  'entity-verification': { subject: 'Verify Your Email - Entity Registration', passKey: process.env.ZEPTO_PASS_REGISTRATION ?? '' },
 };
 
 function getEmailHTML(purpose: EmailPurpose, name: string, otp: string): string {
@@ -35,6 +37,8 @@ function getEmailHTML(purpose: EmailPurpose, name: string, otp: string): string 
       return registrationOTPEmail(name, otp, "Use the code below to sign in to your Orgzify account.");
     case 'password-reset':
       return registrationOTPEmail(name, otp, "Use the code below to reset your Orgzify password.");
+    case 'entity-verification':
+      return registrationOTPEmail(name, otp, "Use the code below to verify your email for Entity Registration.");
     default:
       return registrationOTPEmail(name, otp);
   }

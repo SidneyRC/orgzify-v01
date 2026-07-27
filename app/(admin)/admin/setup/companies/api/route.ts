@@ -6,6 +6,14 @@ import { getActiveCompanyId } from '@/lib/activeCompanyContext'
 import { getFullCompanyRights } from '@/lib/getCompanyRights'
 import { sendCompanyInvite, sendCompanyDeactivated, sendCompanyReactivated } from '@/lib/sendInvite'
 
+const SUPER_ADMIN_ROLE_ID = 'd48c4a41-701b-4f70-bcbe-d92020808c00'
+
+async function isSuperAdmin(user_id: string) {
+  const { data } = await supabaseAdmin
+    .from('user_roles').select('id').eq('user_id', user_id).eq('role_id', SUPER_ADMIN_ROLE_ID).eq('is_active', true).maybeSingle()
+  return !!data
+}
+
 export async function GET(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -19,10 +27,25 @@ export async function GET(req: NextRequest) {
 
   // Active companies list for parent/reporting dropdowns
   if (searchParams.get('type') === 'active_companies') {
-    const { data, error } = await supabaseAdmin
-      .from('companies').select('id, display_name').eq('company_status', 'active').order('display_name')
+    const superAdmin = await isSuperAdmin(session.user_id)
+
+    if (superAdmin) {
+      const { data, error } = await supabaseAdmin
+        .from('companies').select('id, display_name').eq('company_status', 'active').order('display_name')
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ data: data || [], isSuperAdmin: true })
+    }
+
+    const rawContextDD = decodeURIComponent(req.cookies.get('orgzify_context')?.value || '')
+    const [ctxTypeDD, ctxIdDD] = rawContextDD.split(':')
+    const processIdDD = ctxTypeDD === 'company' ? ctxIdDD : undefined
+    const scopedIdsDD = await getScopedCompanyIds(session, { processId: processIdDD, module: 'companies' })
+
+    let ddQuery = supabaseAdmin.from('companies').select('id, display_name').eq('company_status', 'active').order('display_name')
+    if (scopedIdsDD) ddQuery = ddQuery.in('id', scopedIdsDD)
+    const { data, error } = await ddQuery
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ data: data || [] })
+    return NextResponse.json({ data: data || [], isSuperAdmin: false })
   }
 
 // Countries that have companies with addresses

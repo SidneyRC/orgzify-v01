@@ -4,9 +4,9 @@ import { useTheme } from '@/lib/ThemeContext'
 
 type Filters = { country_id: string; state_id: string; district_id: string; city_id: string; search: string }
 type Option = { id: string; name: string }
-type Props = { filters: Filters; countries: Option[]; onFilterChange: (f: Filters) => void }
+type Props = { filters: Filters; countries: Option[]; onSearch: (f: Filters) => void; onReset: () => void }
 
-export default function OREV1046CToolbar({ filters, countries, onFilterChange }: Props) {
+export default function OREV1046CToolbar({ filters, countries, onSearch, onReset }: Props) {
   const { theme } = useTheme()
   const [pending, setPending] = useState<Filters>(filters)
   const [states, setStates] = useState<Option[]>([])
@@ -45,13 +45,13 @@ export default function OREV1046CToolbar({ filters, countries, onFilterChange }:
     if (district_id) fetchLocs('city', district_id, pending.country_id, setCities)
   }
 
-  const handleSearch = () => onFilterChange(pending)
+  const handleSearch = () => onSearch(pending)
 
   const handleReset = () => {
     setStates([]); setDistricts([]); setCities([])
     const empty = { country_id: '', state_id: '', district_id: '', city_id: '', search: '' }
     setPending(empty)
-    onFilterChange(empty)
+    onReset()
   }
 
   return (

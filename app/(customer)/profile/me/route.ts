@@ -31,6 +31,13 @@ const companies = (userRoles ?? [])
   .map((r: any) => Array.isArray(r.companies) ? r.companies[0] : r.companies)
   .filter((c: any) => c && c.company_status === 'active' && !seen.has(c.id) && seen.add(c.id));
 
+const { data: entities } = await supabase
+  .from('entities')
+  .select('id, process_id, display_name, status')
+  .eq('user_id', session.user_id)
+  .neq('status', 'archived')
+  .order('created_at', { ascending: false });
+
 return NextResponse.json({
   profile: {
     ...data,
@@ -38,6 +45,7 @@ return NextResponse.json({
     email: userData?.email,
     is_super_admin: userData?.is_super_admin ?? false,
     companies: companies ?? [],
+    entities: entities ?? [],
   }
 });
 }

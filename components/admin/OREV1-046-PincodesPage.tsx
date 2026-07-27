@@ -37,10 +37,10 @@ export default function OREV1046PincodesPage() {
     fetch('/admin/setup/pincodes/api?type=countries').then(r => r.json()).then(j => setCountries(j.data || []))
   }, [])
 
-  const fetchData = useCallback(async () => {
-    const hasFilter = filters.country_id || filters.state_id || filters.district_id || filters.city_id || filters.search
-    if (!hasFilter) { setRows([]); setTotal(0); setSearched(false); return }
+    const fetchData = useCallback(async () => {
+    if (!searched) { setRows([]); setTotal(0); return }
     setLoading(true)
+
     const params = new URLSearchParams({ page: String(page), limit: String(limit), ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) })
     const res = await fetch(`/admin/setup/pincodes/api?${params}`)
     const json = await res.json()
@@ -90,7 +90,10 @@ export default function OREV1046PincodesPage() {
         </div>
       </div>
 
-      <OREV1046CToolbar filters={filters} countries={countries} onFilterChange={(f) => { setFilters(f); setPage(1) }} />
+      <OREV1046CToolbar filters={filters} countries={countries}
+        onSearch={(f) => { setFilters(f); setPage(1); setSearched(true) }}
+        onReset={() => { setFilters({ country_id: '', state_id: '', district_id: '', city_id: '', search: '' }); setPage(1); setSearched(false) }}
+      />
 
       {/* Pagination — exactly like Locations */}
       <div className="flex items-center gap-1.5 md:gap-3 text-xs md:text-sm text-gray-500 mb-4 overflow-x-auto whitespace-nowrap">

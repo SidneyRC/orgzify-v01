@@ -10,6 +10,7 @@ type UserData = {
   is_complete: boolean;
   is_super_admin: boolean;
   companies: { id: string; display_name: string; slug: string; company_status: string }[];
+  entities: { id: string; process_id: string; display_name: string; status: string }[];
 } | null;
 
 export default function NavUserSection({ initialName, initialAvatar }: { initialName: string; initialAvatar: string }) {
@@ -32,6 +33,7 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
             is_complete: p.is_complete ?? true,
             is_super_admin: p.is_super_admin ?? false,
             companies: p.companies ?? [],
+            entities: p.entities ?? [],
             });
           // full_name includes title e.g. "Mr. Sidney" — take first non-title word
           if (p.full_name) {
@@ -54,6 +56,11 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
       else router.push("/company/select");
   };
 
+  const handleGetStarted = () => {
+    const dest = "/biz/register";
+    router.push(isLoggedIn ? dest : `/login?next=${encodeURIComponent(dest)}`);
+  };
+
   const handleLogout = async () => {
     await fetch('/logout', { method: 'POST' });
     setUser(null);
@@ -66,7 +73,7 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
 
  const userForDropdown = user
   ? { name: user.full_name, avatar: displayAvatar, ...user }
-  : { name: displayName, avatar: displayAvatar, zy_id: '', is_complete: true, is_super_admin: false, companies: [] };
+  : { name: displayName, avatar: displayAvatar, zy_id: '', is_complete: true, is_super_admin: false, companies: [], entities: [] };
 
   return (
     <>
@@ -76,7 +83,7 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
         Host Event
       </button>
 
-      <button onClick={() => router.push(isLoggedIn ? "/register/type" : "/login?next=/register/type")}
+      <button onClick={handleGetStarted}
         className="hidden md:block bg-blue-900 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-blue-800 transition">
         Get Started
       </button>
@@ -94,7 +101,14 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
 
       {/* Mobile nav — hidden on desktop */}
       <div className="md:hidden">
-        <NavMobile isLoggedIn={isLoggedIn} userName={displayName} onHostEvent={handleHostEvent} />
+        <NavMobile
+          isLoggedIn={isLoggedIn}
+          userName={displayName}
+          onHostEvent={handleHostEvent}
+          companies={user?.companies ?? []}
+          entities={user?.entities ?? []}
+          isSuperAdmin={user?.is_super_admin ?? false}
+        />
       </div>
     </>
   );

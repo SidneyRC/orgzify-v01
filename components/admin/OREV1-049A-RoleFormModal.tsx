@@ -1,19 +1,22 @@
 'use client'
 import { useTheme } from '@/lib/ThemeContext'
+import { ADMIN_MODULES as PAGES, ADMIN_MODULE_LABELS as PAGE_LABELS, ADMIN_MODULE_RIGHTS as PAGE_RIGHTS, ADMIN_MODULE_EXTRA_RIGHTS as EXTRA_RIGHTS } from '@/lib/adminModules'
 
-const PAGES = ['companies', 'location', 'assign_roles', 'geofence', 'themes', 'roles'] as const
-const PAGE_LABELS: Record<string, string> = { companies: 'Companies', location: 'Location', assign_roles: 'Assign Roles', geofence: 'Geofence', themes: 'Themes', roles: 'Roles & Rights' }
 const RIGHTS = [
   { key: 'can_view', label: 'View' }, { key: 'can_create', label: 'Create' },
   { key: 'can_edit', label: 'Edit' }, { key: 'can_delete', label: 'Delete' },
   { key: 'can_archive', label: 'Archive' }, { key: 'can_download_non_sensitive', label: 'Download' },
+  { key: 'can_download_sensitive', label: 'Download Sensitive' },
+  { key: 'can_overwrite_edit', label: 'Overwrite Edit' },
+  { key: 'can_approve', label: 'Approval' },
 ]
-// Some pages don't support every right (e.g. Geofence rows are auto-created/deleted
-// alongside their company, so Create/Delete don't apply there).
-const PAGE_RIGHTS: Record<string, string[]> = {
-  geofence: ['can_view', 'can_edit', 'can_archive', 'can_download_non_sensitive'],
+
+const rightsForPage = (page: string) => {
+  const standard = PAGE_RIGHTS[page] || ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_archive', 'can_download_non_sensitive']
+  const extra = EXTRA_RIGHTS[page] || []
+  const allowed = [...standard, ...extra]
+  return RIGHTS.filter(r => allowed.includes(r.key))
 }
-const rightsForPage = (page: string) => RIGHTS.filter(r => (PAGE_RIGHTS[page] || RIGHTS.map(x => x.key)).includes(r.key))
 
 type Props = {
   isEdit: boolean

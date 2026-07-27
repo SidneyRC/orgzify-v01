@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, CalendarDays, GraduationCap, Building2, Settings, Database, Table, LogOut, ChevronRight, X } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, GraduationCap, Building2, Settings, Database, Table, LogOut, ChevronRight, X, Network } from "lucide-react";
 import { DesktopNavItem, SectionLabel, MobileNavItem, MobileSectionLabel } from "@/components/admin/OREV1-016A-SidebarNavItems";
 
 const mainNav = [
@@ -14,6 +14,7 @@ const mainNav = [
 ];
 const masterNav = [{ icon: Database, label: "Master Data", href: "/admin/master" }, { icon: Table, label: "Table", href: "/admin/table" }];
 const setupNav = [{ icon: Settings, label: "Setup", href: "/admin/setup" }];
+const ecosystemNav = [{ icon: Network, label: "Ecosystem", href: "/admin/ecosystem" }];
 const companySetupHref = (slug: string) => `/company/${slug}/setup`;
 
 interface Props {
@@ -34,6 +35,8 @@ export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMob
     ? (isCompanyMode ? [{ icon: Settings, label: "Setup", href: companySetupHref(slug!) }] : setupNav)
     : [];
   const visibleMaster = isCompanyMode ? [] : masterNav;
+  const showEcosystem = !isCompanyMode || (rights ?? []).some(r => ["entities", "support"].includes(r));
+  const visibleEcosystem = showEcosystem ? ecosystemNav : [];
   const topTitle = isCompanyMode ? companyName! : "ORGZIFY";
   const topSubtitle = isCompanyMode ? (roleLabel ?? "") : "Super Admin";
 
@@ -56,6 +59,8 @@ export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMob
           {visibleMain.map(item => <DesktopNavItem key={item.href} item={item} expanded={expanded} isActive={isActive(item.href)} />)}
           {visibleMaster.length > 0 && !isCompanyMode && <SectionLabel label="Master Data" expanded={expanded} />}
           {visibleMaster.map(item => <DesktopNavItem key={item.href} item={item} expanded={expanded} isActive={isActive(item.href)} />)}
+          {visibleEcosystem.length > 0 && !isCompanyMode && <SectionLabel label="Ecosystem" expanded={expanded} />}
+          {visibleEcosystem.map(item => <DesktopNavItem key={item.href} item={item} expanded={expanded} isActive={isActive(item.href)} />)}
           {visibleSetup.length > 0 && !isCompanyMode && <SectionLabel label="Setup" expanded={expanded} />}
           {visibleSetup.map(item => <DesktopNavItem key={item.href} item={item} expanded={expanded} isActive={isActive(item.href)} />)}
         </nav>
@@ -84,6 +89,8 @@ export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMob
               {visibleMain.map(item => <MobileNavItem key={item.href} item={item} isActive={isActive(item.href)} onClick={() => setMobileOpen(false)} />)}
               {visibleMaster.length > 0 && !isCompanyMode && <MobileSectionLabel label="Master Data" />}
               {visibleMaster.map(item => <MobileNavItem key={item.href} item={item} isActive={isActive(item.href)} onClick={() => setMobileOpen(false)} />)}
+              {visibleEcosystem.length > 0 && !isCompanyMode && <MobileSectionLabel label="Ecosystem" />}
+              {visibleEcosystem.map(item => <MobileNavItem key={item.href} item={item} isActive={isActive(item.href)} onClick={() => setMobileOpen(false)} />)}
               {visibleSetup.length > 0 && !isCompanyMode && <MobileSectionLabel label="Setup" />}
               {visibleSetup.map(item => <MobileNavItem key={item.href} item={item} isActive={isActive(item.href)} onClick={() => setMobileOpen(false)} />)}
             </nav>

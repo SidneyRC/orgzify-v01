@@ -43,11 +43,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data })
   }
 
-  // Main pincodes list — only when filter/search active
-  const hasFilter = country_id || state_id || district_id || city_id || search
-  if (!hasFilter) return NextResponse.json({ data: [], total: 0, page, limit })
-
+// Main pincodes list — page.tsx now controls whether this runs at all
+  // (only after Search is pressed), so no filter-guard needed here anymore.
   let query = supabaseAdmin.from('pincodes').select(
+    
     'id, pincode, area, source, is_verified, is_active, created_at, country_id, state_id, district_id, city_id',
     { count: 'exact' }
   )

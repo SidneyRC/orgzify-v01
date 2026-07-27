@@ -32,12 +32,5 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const rights = await getCompanyRights(session.user_id, company.id)
   const roleName = Array.isArray(roleRow.admin_roles) ? roleRow.admin_roles[0]?.name : (roleRow.admin_roles as any)?.name
 
-  const response = NextResponse.json({ allowed: true, role: roleName ?? 'Company Admin', company_name: company.display_name, company_id: company.id, theme, rights })
-
-  // Every /company/[slug]/... page load re-syncs the active context cookie
-  response.cookies.set('orgzify_context', `company:${company.process_id}`, {
-    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/',
-  })
-
-  return response
+  return NextResponse.json({ allowed: true, role: roleName ?? 'Company Admin', company_name: company.display_name, company_id: company.id, theme, rights })
 }

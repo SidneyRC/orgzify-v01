@@ -22,10 +22,11 @@ export default function OREV1047BWizardStep1({ data, onNext, onSaveDraft, saving
     legal_name: data.legal_name, display_name: data.display_name,
     slug: data.slug, company_code: (data as any).company_code || '',
     company_type: data.company_type, branch_type: data.branch_type,
-    parent_company_id: data.parent_company_id || 'root',
-    reporting_company_id: data.reporting_company_id || 'root',
+    parent_company_id: data.parent_company_id === ROOT_ID ? 'root' : (data.parent_company_id || 'root'),
+    reporting_company_id: data.reporting_company_id === ROOT_ID ? 'root' : (data.reporting_company_id || 'root'),
   })
   const [companies, setCompanies] = useState<{ id: string; display_name: string }[]>([])
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const radius = theme?.global_border_radius || '12px'
@@ -38,6 +39,7 @@ export default function OREV1047BWizardStep1({ data, onNext, onSaveDraft, saving
       .then(r => r.json()).then(j => {
         const filtered = (j.data || []).filter((c: any) => c.id !== ROOT_ID)
         setCompanies(filtered)
+        setIsSuperAdmin(!!j.isSuperAdmin)
       })
   }, [])
 
@@ -74,7 +76,7 @@ export default function OREV1047BWizardStep1({ data, onNext, onSaveDraft, saving
       <select value={form[key] as string} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
         className="h-10 px-3 text-sm focus:outline-none" style={inputStyle}>
         <option value="">Select…</option>
-        {withRoot && <option value="root">Root (Orgzify HQ)</option>}
+        {withRoot && isSuperAdmin && <option value="root">Root (Orgzify HQ)</option>}
         {typeof options[0] === 'string'
           ? (options as string[]).map(o => <option key={o} value={o}>{o}</option>)
           : (options as { id: string; display_name: string }[]).map(o => <option key={o.id} value={o.id}>{o.display_name}</option>)}

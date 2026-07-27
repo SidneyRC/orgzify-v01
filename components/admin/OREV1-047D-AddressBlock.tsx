@@ -10,12 +10,15 @@ export type AddressData = {
   state_id: string; state_name: string; country_id: string; landmark: string
 }
 
+type AreaOption = { id: string; pincode: string; area: string }
+
 type Props = {
   title: string
   values: AddressData
   onChange: (val: AddressData) => void
   errors: Record<string, string>
   prefix: string
+  apiBase?: string
 }
 
 const EMPTY: AddressData = {
@@ -25,25 +28,56 @@ const EMPTY: AddressData = {
 }
 export const emptyAddress = (): AddressData => ({ ...EMPTY })
 
-const API = '/admin/setup/companies/new/api'
+const DEFAULT_API = '/admin/shared/address/api'
 
-export default function OREV1047DAddressBlock({ title, values, onChange, errors, prefix }: Props) {
+export default function OREV1047DAddressBlock({ title, values, onChange, errors, prefix, apiBase }: Props) {
   const { theme } = useTheme()
+  const API = apiBase || DEFAULT_API
   const radius = theme?.global_border_radius || '12px'
+  const dropStyle = { backgroundColor: theme?.dropdown_bg || '#fff', border: `1px solid ${theme?.dropdown_border || '#e5e7eb'}`, borderRadius: radius }
   const inputStyle = (hasErr: boolean) => ({
     backgroundColor: theme?.input_bg || '#fff',
     border: `1px solid ${hasErr ? '#ef4444' : theme?.input_border || '#e5e7eb'}`,
     borderRadius: radius
   })
   const [countries, setCountries] = useState<{ id: string; name: string }[]>([])
+  const [areaOptions, setAreaOptions] = useState<AreaOption[]>([])
 
-  // Load countries on mount so autofill from pincode works immediately
   useEffect(() => {
     fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_countries' }) })
       .then(r => r.json()).then(j => setCountries(j.data || []))
   }, [])
 
   const set = (patch: Partial<AddressData>) => onChange({ ...values, ...patch })
+
+// Looks up District/State/Country above a picked City or District,
+  // so directly selecting one auto-fills the rest — same behavior as Pincode.
+  // When City changes, District/State must be re-derived from scratch (not
+  // left over from before) — otherwise a stale District can stick around
+  // if the new City's chain lookup doesn't return one.
+  const fillParentChain = async (base: AddressData, source: 'city' | 'district') => {
+    const startId = base.city_id || base.district_id
+    if (!startId) { onChange(base); return }
+
+    const cleared = source === 'city'
+      ? { ...base, district_id: '', district_name: '', state_id: '', state_name: '' }
+      : base
+    onChange(cleared)
+
+    const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_location_chain', id: startId }) })
+    const json = await res.json()
+    const chain = json.data
+    if (!chain) return
+
+    onChange({
+      ...cleared,
+      district_id: chain.district?.id || cleared.district_id,
+      district_name: chain.district?.name || cleared.district_name,
+      state_id: chain.state?.id || cleared.state_id,
+      state_name: chain.state?.name || cleared.state_name,
+      country_id: chain.country_id || cleared.country_id
+    })
+  }
 
   const field = (label: string, key: keyof AddressData, placeholder: string, required = false) => (
     <div className="flex flex-col gap-1">
@@ -62,33 +96,55 @@ export default function OREV1047DAddressBlock({ title, values, onChange, errors,
 
         <OREV1047DPincodeTypeahead
           value={values.pincode} onChange={v => set({ pincode: v })} required
-          error={errors[`${prefix}_pincode`]}
+          error={errors[`${prefix}_pincode`]} apiBase={API}
           onAutoFill={d => set({
             pincode: d.pincode, area: d.area, city_id: d.city_id, city_name: d.city_name,
             district_id: d.district_id, district_name: d.district_name,
             state_id: d.state_id, state_name: d.state_name, country_id: d.country_id
           })}
+          onMultipleAreas={rows => setAreaOptions(rows)}
         />
 
-        {field('Area', 'area', 'e.g. Anna Nagar', true)}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500">Area <span className="text-red-500">*</span></label>
+          <input value={values.area} onChange={e => { set({ area: e.target.value }); setAreaOptions([]) }}
+            placeholder="e.g. Anna Nagar" className="h-10 px-3 text-sm focus:outline-none w-full"
+            style={inputStyle(!!errors[`${prefix}_area`])} />
+          {areaOptions.length > 0 && (
+            <div className="relative">
+              <div className="absolute z-20 w-full shadow-lg max-h-48 overflow-y-auto" style={dropStyle}>
+                {areaOptions.map(r => (
+                  <div key={r.id} onMouseDown={e => { e.preventDefault(); set({ area: r.area }); setAreaOptions([]) }}
+                    className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">{r.area}</div>
+                ))}
+                <div onMouseDown={e => { e.preventDefault(); set({ area: '' }); setAreaOptions([]) }}
+                  className="px-3 py-2 text-sm cursor-pointer text-blue-600 hover:bg-blue-50 font-medium border-t border-gray-100">
+                  + Add new area for {values.pincode}
+                </div>
+              </div>
+            </div>
+          )}
+          {errors[`${prefix}_area`] && <span className="text-xs text-red-500">{errors[`${prefix}_area`]}</span>}
+        </div>
+
         {field('Address Line 1', 'line1', 'Street, building, floor', true)}
         {field('Address Line 2', 'line2', 'Flat no, suite etc.')}
 
-        <OREV1047DLocationTypeahead label="City" level="city" required
+        <OREV1047DLocationTypeahead label="City" level="city" required apiBase={API}
           parent_id={values.district_id || null} country_id={values.country_id || null}
           value={values.city_id ? { id: values.city_id, name: values.city_name } : null}
-          onChange={v => set({ city_id: v?.id || '', city_name: v?.name || '' })}
+          onChange={v => fillParentChain({ ...values, city_id: v?.id || '', city_name: v?.name || '' }, 'city')}
           error={errors[`${prefix}_city_id`]}
         />
 
-        <OREV1047DLocationTypeahead label="District" level="district"
+          <OREV1047DLocationTypeahead label="District" level="district" apiBase={API}
           parent_id={values.state_id || null} country_id={values.country_id || null}
           value={values.district_id ? { id: values.district_id, name: values.district_name } : null}
-          onChange={v => set({ district_id: v?.id || '', district_name: v?.name || '' })}
+          onChange={v => fillParentChain({ ...values, district_id: v?.id || '', district_name: v?.name || '' }, 'district')}
           error={errors[`${prefix}_district_id`]}
         />
 
-        <OREV1047DLocationTypeahead label="State" level="state" required
+        <OREV1047DLocationTypeahead label="State" level="state" required apiBase={API}
           country_id={values.country_id || null}
           value={values.state_id ? { id: values.state_id, name: values.state_name } : null}
           onChange={v => set({ state_id: v?.id || '', state_name: v?.name || '' })}
