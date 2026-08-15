@@ -1,3 +1,4 @@
+// GOES IN: lib/getCompanyRights.ts
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 // EXISTING — kept exactly as-is, still used wherever we only need
@@ -41,6 +42,9 @@ export type ModuleRights = {
   can_approve: boolean
   can_restore: boolean
   can_activate: boolean
+  can_hard_delete: boolean
+  can_sync: boolean
+  can_view_audit_trail: boolean
 }
 
 export async function getFullCompanyRights(user_id: string, company_id: string): Promise<Record<string, ModuleRights>> {
@@ -57,7 +61,7 @@ export async function getFullCompanyRights(user_id: string, company_id: string):
 
   const { data: perms, error: permErr } = await supabaseAdmin
     .from("role_permissions")
-    .select("module, can_view, can_create, can_edit, can_delete, can_archive, can_download_non_sensitive, can_download_sensitive, can_overwrite_edit, can_approve, can_restore, can_activate")
+    .select("module, can_view, can_create, can_edit, can_delete, can_archive, can_download_non_sensitive, can_download_sensitive, can_overwrite_edit, can_approve, can_restore, can_activate, can_hard_delete, can_sync, can_view_audit_trail")
     .in("role_id", roleIds);
 
   if (permErr || !perms) return {};
@@ -79,6 +83,9 @@ export async function getFullCompanyRights(user_id: string, company_id: string):
       can_approve: !!p.can_approve || !!existing?.can_approve,
       can_restore: !!p.can_restore || !!existing?.can_restore,
       can_activate: !!p.can_activate || !!existing?.can_activate,
+      can_hard_delete: !!p.can_hard_delete || !!existing?.can_hard_delete,
+      can_sync: !!p.can_sync || !!existing?.can_sync,
+      can_view_audit_trail: !!p.can_view_audit_trail || !!existing?.can_view_audit_trail,
     };
   }
   return result;

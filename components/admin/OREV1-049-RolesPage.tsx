@@ -1,3 +1,4 @@
+// GOES IN: components/admin/OREV1-049-RolesPage.tsx
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -5,9 +6,10 @@ import { useTheme } from '@/lib/ThemeContext'
 import toast from 'react-hot-toast'
 import OREV1049ARoleFormModal from './OREV1-049A-RoleFormModal'
 import OREV1049BRolesFilters from './OREV1-049B-RolesFilters'
+import { ADMIN_MODULES } from '@/lib/adminModules'
 
 type RoleRow = { id: string; name: string; status: string; is_default: boolean; company_id: string; company_name: string; modules: string }
-const EMPTY_PERMS = { companies: {}, location: {}, assign_roles: {}, geofence: {}, themes: {}, roles: {}, entities: {}, support: {} }
+const buildEmptyPerms = () => ADMIN_MODULES.reduce((acc, m) => ({ ...acc, [m]: {} }), {} as Record<string, Record<string, boolean>>)
 
 const IconView = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
 const IconEdit = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -34,7 +36,7 @@ export default function OREV1049RolesPage({ ownCompanyId = null, backLink = '/ad
   const [companyId, setCompanyId] = useState('')
   const [status, setStatus] = useState('active')
   const [companies, setCompanies] = useState<{ id: string; display_name: string }[]>([])
-  const [perms, setPerms] = useState<Record<string, Record<string, boolean>>>(EMPTY_PERMS)
+  const [perms, setPerms] = useState<Record<string, Record<string, boolean>>>(buildEmptyPerms())
   const [saving, setSaving] = useState(false)
 
   const radius = theme?.global_border_radius || '12px'
@@ -61,7 +63,7 @@ export default function OREV1049RolesPage({ ownCompanyId = null, backLink = '/ad
   const runReset = () => { setSearch(''); setAppliedSearch(''); setFilterCompany(''); setFilterStatus(''); loadRoles('', '') }
 
   const togglePerm = (page: string, key: string) => setPerms(p => ({ ...p, [page]: { ...p[page], [key]: !p[page][key] } }))
-  const resetForm = () => { setName(''); setCompanyId(''); setStatus('active'); setPerms(EMPTY_PERMS); setEditId(null); setViewOnly(false); setShowForm(false) }
+  const resetForm = () => { setName(''); setCompanyId(''); setStatus('active'); setPerms(buildEmptyPerms()); setEditId(null); setViewOnly(false); setShowForm(false) }
   const openCreate = () => { resetForm(); setShowForm(true) }
 
   const openEdit = async (roleId: string, readOnly = false) => {
@@ -70,7 +72,7 @@ export default function OREV1049RolesPage({ ownCompanyId = null, backLink = '/ad
     if (json.error) { toast.error(json.error); return }
     const d = json.data
     setName(d.name); setCompanyId(d.company_id); setStatus(d.status || 'active')
-    const loaded: Record<string, Record<string, boolean>> = { companies: {}, location: {}, assign_roles: {}, geofence: {}, themes: {}, roles: {}, entities: {}, support: {} }
+    const loaded: Record<string, Record<string, boolean>> = buildEmptyPerms()
     for (const p of d.permissions) { const { module, id, role_id, created_at, updated_at, ...flags } = p; loaded[module] = flags }
     setPerms(loaded); setEditId(roleId); setViewOnly(readOnly); setShowForm(true)
   }

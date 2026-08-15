@@ -59,13 +59,15 @@ export default function EntityDashboardPage() {
   const radius = theme?.global_border_radius || '16px'
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <EntityDashboardHero entityName={access.entity_name} status={access.status} theme={theme} radius={radius} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2">
-          <EntityDashboardCards processId={access.process_id} moduleAccess={access.module_access} theme={theme} radius={radius} />
+      <div className="flex flex-col lg:flex-row gap-4 mt-4">
+        <div className="flex-1 min-w-0">
+          <EntityDashboardCards processId={access.process_id} entitySlug={slug} moduleAccess={access.module_access} theme={theme} radius={radius} />
         </div>
-        <EntityDashboardOfficePanel office={office} theme={theme} radius={radius} />
+        <div className="w-full lg:w-[300px] shrink-0">
+          <EntityDashboardOfficePanel office={office} theme={theme} radius={radius} />
+        </div>
       </div>
     </div>
   )

@@ -261,3 +261,10 @@ export const SESSION_CONFIG = {
   REMEMBER_ME_DAYS:      30,
   EMAIL_VERIFY_LOCK_DAYS:15,
 } as const;
+
+// ─────────────────────────────────────────
+// Default Virtual Venue ID for hardcoding
+// ─────────────────────────────────────────
+
+
+export const VIRTUAL_VENUE_ID = '9e33d704-a9cc-4718-9dc4-781e51bd10ce'

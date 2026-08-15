@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, CalendarDays, GraduationCap, Building2, Settings, Database, Table, LogOut, ChevronRight, X, Network } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, GraduationCap, Building2, Settings, Database, Table, LogOut, ChevronRight, X, Network, List, PlusCircle, Ticket } from "lucide-react";
 import { DesktopNavItem, SectionLabel, MobileNavItem, MobileSectionLabel } from "@/components/admin/OREV1-016A-SidebarNavItems";
 
 const mainNav = [
@@ -16,36 +16,51 @@ const masterNav = [{ icon: Database, label: "Master Data", href: "/admin/master"
 const setupNav = [{ icon: Settings, label: "Setup", href: "/admin/setup" }];
 const ecosystemNav = [{ icon: Network, label: "Ecosystem", href: "/admin/ecosystem" }];
 const companySetupHref = (slug: string) => `/company/${slug}/setup`;
+const entityEventsNav = (slug: string) => [
+  { icon: List, label: "List of Events", href: `/biz/${slug}/events` },
+  { icon: PlusCircle, label: "Event Builder", href: `/biz/${slug}/events/create` },
+  { icon: Ticket, label: "Booking", href: `/biz/${slug}/events/bookings` },
+  { icon: Users, label: "Users", href: `/biz/${slug}/events/users` },
+];
+
+type EntityModuleAccess = { pages: boolean; academy: boolean; events: boolean };
 
 interface Props {
   expanded: boolean; setExpanded: (v: boolean) => void;
   mobileOpen: boolean; setMobileOpen: (v: boolean) => void;
   companyName?: string; roleLabel?: string; rights?: string[]; slug?: string;
+  entityName?: string; entitySlug?: string; entityModuleAccess?: EntityModuleAccess;
 }
 
-export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMobileOpen, companyName, roleLabel, rights, slug }: Props) {
+export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMobileOpen, companyName, roleLabel, rights, slug, entityName, entitySlug, entityModuleAccess }: Props) {
   const pathname = usePathname();
   const isCompanyMode = !!companyName;
-  const showSetup = !isCompanyMode || (rights ?? []).some(r => ["companies", "location"].includes(r));
+  const isEntityMode = !!entityName;
+  const showSetup = (!isCompanyMode && !isEntityMode) || (isCompanyMode && (rights ?? []).some(r => ["companies", "location"].includes(r)));
   const companyDashboardHref = `/company/${slug}/dashboard`;
+  const entityDashboardHref = `/biz/${entitySlug}/dashboard`;
   const visibleMain = isCompanyMode
     ? mainNav.filter(i => i.label === "Dashboard").map(i => ({ ...i, href: companyDashboardHref }))
+    : isEntityMode
+    ? mainNav.filter(i => i.label === "Dashboard").map(i => ({ ...i, href: entityDashboardHref }))
     : mainNav;
   const visibleSetup = showSetup
     ? (isCompanyMode ? [{ icon: Settings, label: "Setup", href: companySetupHref(slug!) }] : setupNav)
     : [];
-  const visibleMaster = isCompanyMode ? [] : masterNav;
-  const showEcosystem = !isCompanyMode || (rights ?? []).some(r => ["entities", "support"].includes(r));
+  const showMaster = !isCompanyMode && !isEntityMode || (isCompanyMode && (rights ?? []).some(r => ["categories", "event_tags_format"].includes(r)));
+  const visibleMaster = showMaster ? masterNav : [];
+  const showEcosystem = !isCompanyMode && !isEntityMode || (isCompanyMode && (rights ?? []).some(r => ["entities", "support"].includes(r)));
   const visibleEcosystem = showEcosystem ? ecosystemNav : [];
-  const topTitle = isCompanyMode ? companyName! : "ORGZIFY";
-  const topSubtitle = isCompanyMode ? (roleLabel ?? "") : "Super Admin";
+  const visibleEvents = isEntityMode && entityModuleAccess?.events ? entityEventsNav(entitySlug!) : [];
+  const topTitle = isCompanyMode ? companyName! : isEntityMode ? entityName! : "ORGZIFY";
+  const topSubtitle = isCompanyMode ? (roleLabel ?? "") : isEntityMode ? "Organiser" : "Super Admin";
 
   useEffect(() => { setMobileOpen(false); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-  const isActive = (href: string) => href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+  const isActive = (href: string, exact?: boolean) => exact ? pathname === href : (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
 
   return (
     <>
-      <aside className={`hidden md:flex flex-col h-screen bg-blue-900 border-r border-blue-800 shrink-0 transition-all duration-300 ${expanded ? "w-52" : "w-14"}`}>
+      <aside className={`hidden md:flex flex-col h-screen sticky top-0 bg-blue-900 border-r border-blue-800 shrink-0 transition-all duration-300 ${expanded ? "w-52" : "w-14"}`}>
         <div className="flex items-center justify-between px-2 py-3 border-b border-blue-800 min-h-[56px]">
           <div className={`transition-all duration-300 overflow-hidden ${expanded ? "opacity-100 max-w-[160px] pl-1" : "opacity-0 max-w-0"}`}>
             <div className="text-white font-bold text-sm leading-none truncate max-w-[140px]">{topTitle}</div>
@@ -57,6 +72,8 @@ export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMob
         </div>
         <nav className="flex-1 py-3 space-y-0.5 overflow-hidden">
           {visibleMain.map(item => <DesktopNavItem key={item.href} item={item} expanded={expanded} isActive={isActive(item.href)} />)}
+          {visibleEvents.length > 0 && <SectionLabel label="Events" expanded={expanded} />}
+          {visibleEvents.map(item => <DesktopNavItem key={item.href} item={item} expanded={expanded} isActive={isActive(item.href, true)} />)}
           {visibleMaster.length > 0 && !isCompanyMode && <SectionLabel label="Master Data" expanded={expanded} />}
           {visibleMaster.map(item => <DesktopNavItem key={item.href} item={item} expanded={expanded} isActive={isActive(item.href)} />)}
           {visibleEcosystem.length > 0 && !isCompanyMode && <SectionLabel label="Ecosystem" expanded={expanded} />}
@@ -87,6 +104,8 @@ export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMob
             </div>
             <nav className="flex-1 py-4 space-y-0.5 overflow-y-auto">
               {visibleMain.map(item => <MobileNavItem key={item.href} item={item} isActive={isActive(item.href)} onClick={() => setMobileOpen(false)} />)}
+              {visibleEvents.length > 0 && <MobileSectionLabel label="Events" />}
+              {visibleEvents.map(item => <MobileNavItem key={item.href} item={item} isActive={isActive(item.href, true)} onClick={() => setMobileOpen(false)} />)}
               {visibleMaster.length > 0 && !isCompanyMode && <MobileSectionLabel label="Master Data" />}
               {visibleMaster.map(item => <MobileNavItem key={item.href} item={item} isActive={isActive(item.href)} onClick={() => setMobileOpen(false)} />)}
               {visibleEcosystem.length > 0 && !isCompanyMode && <MobileSectionLabel label="Ecosystem" />}

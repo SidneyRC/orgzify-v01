@@ -31,10 +31,11 @@ export default function EntityDashboardOfficePanel({ office, theme, radius }: {
           <p className="text-sm font-medium text-gray-700 mb-1">{office.company_name}</p>
           {office.address && (
             <p className="text-xs mb-4" style={{ color: mutedColor }}>
-              {office.address.line1}{office.address.line2 ? `, ${office.address.line2}` : ""}<br />
+              {office.address.line1}<br />
+              {office.address.line2 && <>{office.address.line2}<br /></>}
               {office.address.area}<br />
-              {office.address.city}, {office.address.state} - {office.address.pincode}<br />
-              {office.address.country}
+              {office.address.city}, {office.address.state}<br />
+              {office.address.pincode} - {office.address.country}
             </p>
           )}
         </>

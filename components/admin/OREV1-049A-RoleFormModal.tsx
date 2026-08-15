@@ -1,3 +1,4 @@
+// GOES IN: components/admin/OREV1-049A-RoleFormModal.tsx
 'use client'
 import { useTheme } from '@/lib/ThemeContext'
 import { ADMIN_MODULES as PAGES, ADMIN_MODULE_LABELS as PAGE_LABELS, ADMIN_MODULE_RIGHTS as PAGE_RIGHTS, ADMIN_MODULE_EXTRA_RIGHTS as EXTRA_RIGHTS } from '@/lib/adminModules'
@@ -9,6 +10,10 @@ const RIGHTS = [
   { key: 'can_download_sensitive', label: 'Download Sensitive' },
   { key: 'can_overwrite_edit', label: 'Overwrite Edit' },
   { key: 'can_approve', label: 'Approval' },
+  { key: 'can_restore', label: 'Restore' },
+  { key: 'can_activate', label: 'Activate' },
+  { key: 'can_hard_delete', label: 'Hard Delete' },
+  { key: 'can_sync', label: 'Sync' },
 ]
 
 const rightsForPage = (page: string) => {
@@ -45,7 +50,7 @@ export default function OREV1049ARoleFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto">
         <h2 className="text-base font-semibold mb-1" style={{ color: theme?.color_text_primary || '#111827' }}>
           {readOnly ? 'View Role' : isEdit ? 'Edit Role' : 'Create Role'}
         </h2>

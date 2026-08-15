@@ -35,6 +35,7 @@ export default function OREV1047DAddressBlock({ title, values, onChange, errors,
   const API = apiBase || DEFAULT_API
   const radius = theme?.global_border_radius || '12px'
   const dropStyle = { backgroundColor: theme?.dropdown_bg || '#fff', border: `1px solid ${theme?.dropdown_border || '#e5e7eb'}`, borderRadius: radius }
+  const highlightBg = theme?.dropdown_hover_bg || '#f9fafb'
   const inputStyle = (hasErr: boolean) => ({
     backgroundColor: theme?.input_bg || '#fff',
     border: `1px solid ${hasErr ? '#ef4444' : theme?.input_border || '#e5e7eb'}`,
@@ -42,6 +43,7 @@ export default function OREV1047DAddressBlock({ title, values, onChange, errors,
   })
   const [countries, setCountries] = useState<{ id: string; name: string }[]>([])
   const [areaOptions, setAreaOptions] = useState<AreaOption[]>([])
+  const [areaActiveIndex, setAreaActiveIndex] = useState(-1)
 
   useEffect(() => {
     fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_countries' }) })
@@ -49,6 +51,25 @@ export default function OREV1047DAddressBlock({ title, values, onChange, errors,
   }, [])
 
   const set = (patch: Partial<AddressData>) => onChange({ ...values, ...patch })
+
+  const selectArea = (r: AreaOption) => { set({ area: r.area }); setAreaOptions([]); setAreaActiveIndex(-1) }
+  const addNewArea = () => { set({ area: values.area }); setAreaOptions([]); setAreaActiveIndex(-1) }
+
+  // Keyboard navigation for the Area dropdown: Down/Up highlight through the
+  // area matches (then the "+ Add new area" row last), Enter picks the
+  // highlighted one, Escape closes it. Mirrors PincodeTypeahead's fix.
+  const areaListLength = areaOptions.length + 1
+  const handleAreaKeyDown = (e: React.KeyboardEvent) => {
+    if (areaOptions.length === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setAreaActiveIndex(i => (i + 1) % areaListLength) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setAreaActiveIndex(i => (i - 1 + areaListLength) % areaListLength) }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (areaActiveIndex < 0) return
+      if (areaActiveIndex < areaOptions.length) selectArea(areaOptions[areaActiveIndex])
+      else addNewArea()
+    } else if (e.key === 'Escape') { setAreaOptions([]); setAreaActiveIndex(-1) }
+  }
 
 // Looks up District/State/Country above a picked City or District,
   // so directly selecting one auto-fills the rest — same behavior as Pincode.
@@ -107,18 +128,23 @@ export default function OREV1047DAddressBlock({ title, values, onChange, errors,
 
         <div className="flex flex-col gap-1">
           <label className="text-xs text-gray-500">Area <span className="text-red-500">*</span></label>
-          <input value={values.area} onChange={e => { set({ area: e.target.value }); setAreaOptions([]) }}
+          <input value={values.area} onChange={e => { set({ area: e.target.value }); setAreaOptions([]); setAreaActiveIndex(-1) }}
+            onKeyDown={handleAreaKeyDown}
             placeholder="e.g. Anna Nagar" className="h-10 px-3 text-sm focus:outline-none w-full"
             style={inputStyle(!!errors[`${prefix}_area`])} />
           {areaOptions.length > 0 && (
             <div className="relative">
               <div className="absolute z-20 w-full shadow-lg max-h-48 overflow-y-auto" style={dropStyle}>
-                {areaOptions.map(r => (
-                  <div key={r.id} onMouseDown={e => { e.preventDefault(); set({ area: r.area }); setAreaOptions([]) }}
-                    className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">{r.area}</div>
+                {areaOptions.map((r, i) => (
+                  <div key={r.id} onMouseDown={e => { e.preventDefault(); selectArea(r) }}
+                    onMouseEnter={() => setAreaActiveIndex(i)}
+                    className="px-3 py-2 text-sm cursor-pointer"
+                    style={{ backgroundColor: areaActiveIndex === i ? highlightBg : undefined }}>{r.area}</div>
                 ))}
-                <div onMouseDown={e => { e.preventDefault(); set({ area: '' }); setAreaOptions([]) }}
-                  className="px-3 py-2 text-sm cursor-pointer text-blue-600 hover:bg-blue-50 font-medium border-t border-gray-100">
+                <div onMouseDown={e => { e.preventDefault(); addNewArea() }}
+                  onMouseEnter={() => setAreaActiveIndex(areaOptions.length)}
+                  className="px-3 py-2 text-sm cursor-pointer text-blue-600 font-medium border-t border-gray-100"
+                  style={{ backgroundColor: areaActiveIndex === areaOptions.length ? highlightBg : undefined }}>
                   + Add new area for {values.pincode}
                 </div>
               </div>

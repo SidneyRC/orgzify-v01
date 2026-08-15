@@ -32,11 +32,13 @@ export default function OREV1047DPincodeTypeahead({ value, onChange, onAutoFill,
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${error ? '#ef4444' : theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const dropStyle = { backgroundColor: theme?.dropdown_bg || '#fff', border: `1px solid ${theme?.dropdown_border || '#e5e7eb'}`, borderRadius: radius }
+  const highlightBg = theme?.dropdown_hover_bg || '#f9fafb'
 
   const [query, setQuery] = useState(value || '')
   const [results, setResults] = useState<PincodeResult[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function OREV1047DPincodeTypeahead({ value, onChange, onAutoFill,
   }, [])
 
   const search = async (q: string) => {
-    setQuery(q); onChange(q)
+    setQuery(q); onChange(q); setActiveIndex(-1)
     if (q.length < 2) { setResults([]); setOpen(false); return }
     const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'search_pincodes', query: q }) })
     const json = await res.json()
@@ -68,19 +70,14 @@ export default function OREV1047DPincodeTypeahead({ value, onChange, onAutoFill,
   }
 
   const selectPincode = async (row: PincodeResult) => {
-    setQuery(row.pincode); onChange(row.pincode); setOpen(false)
+    setQuery(row.pincode); onChange(row.pincode); setOpen(false); setActiveIndex(-1)
     const matching = results.filter(r => r.pincode === row.pincode)
     if (matching.length > 1) { await resolveAndFill(matching[0], true); onMultipleAreas(matching) }
     else await resolveAndFill(row)
   }
 
-  const addNewPincode = () => setOpen(false)
+  const addNewPincode = () => { setOpen(false); setActiveIndex(-1) }
 
-  // Runs when the user leaves the Pincode field. Auto-fills everything if
-  // there's exactly one match. If several areas share this pincode, City/
-  // District/State/Country auto-fill right away (they're the same for all
-  // of them), and the list of areas is handed up to AddressBlock so it can
-  // show the picker right under its own Area field.
   const resolveOnBlur = async () => {
     const q = query.trim()
     if (q.length < 6) return
@@ -93,26 +90,43 @@ export default function OREV1047DPincodeTypeahead({ value, onChange, onAutoFill,
 
   const uniquePincodes = results.filter((r, i, arr) => arr.findIndex(x => x.pincode === r.pincode) === i)
   const showAddPincode = query.trim().length > 0 && !uniquePincodes.find(r => r.pincode === query.trim())
+  const listLength = uniquePincodes.length + (showAddPincode ? 1 : 0)
+
+  // Keyboard navigation: Down/Up move a highlight through the list
+  // (pincode rows, then the "+ Add" row last), Enter picks whatever is
+  // highlighted, Escape closes the list without picking anything.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open || listLength === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(i => (i + 1) % listLength) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(i => (i - 1 + listLength) % listLength) }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (activeIndex < 0) return
+      if (activeIndex < uniquePincodes.length) selectPincode(uniquePincodes[activeIndex])
+      else addNewPincode()
+    } else if (e.key === 'Escape') { setOpen(false); setActiveIndex(-1) }
+  }
 
   return (
     <div className="flex flex-col gap-1" ref={ref}>
       <label className="text-xs text-gray-500">Pincode {required && <span className="text-red-500">*</span>}</label>
       <div className="relative">
-        <input value={query} onChange={e => search(e.target.value)} onBlur={resolveOnBlur}
+        <input value={query} onChange={e => search(e.target.value)} onBlur={resolveOnBlur} onKeyDown={handleKeyDown}
           placeholder="e.g. 600001" className="w-full h-10 px-3 text-sm focus:outline-none" style={inputStyle} />
         {loading && <div className="absolute right-3 top-3 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
 
         {open && (uniquePincodes.length > 0 || showAddPincode) && (
           <div className="absolute z-20 w-full mt-1 shadow-lg max-h-48 overflow-y-auto" style={dropStyle}>
-            {uniquePincodes.map(r => (
-              <div key={r.id} onMouseDown={e => { e.preventDefault(); selectPincode(r) }}
-                className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+            {uniquePincodes.map((r, i) => (
+              <div key={r.id} onMouseDown={e => { e.preventDefault(); selectPincode(r) }} onMouseEnter={() => setActiveIndex(i)}
+                className="px-3 py-2 text-sm cursor-pointer" style={{ backgroundColor: activeIndex === i ? highlightBg : undefined }}>
                 {r.pincode}
               </div>
             ))}
             {showAddPincode && (
-              <div onMouseDown={e => { e.preventDefault(); addNewPincode() }}
-                className="px-3 py-2.5 text-sm cursor-pointer text-blue-600 hover:bg-blue-50 font-medium border-t border-gray-100">
+              <div onMouseDown={e => { e.preventDefault(); addNewPincode() }} onMouseEnter={() => setActiveIndex(uniquePincodes.length)}
+                className="px-3 py-2.5 text-sm cursor-pointer text-blue-600 font-medium border-t border-gray-100"
+                style={{ backgroundColor: activeIndex === uniquePincodes.length ? highlightBg : undefined }}>
                 + Add "{query.trim()}"
               </div>
             )}

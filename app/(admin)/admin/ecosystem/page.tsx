@@ -17,40 +17,39 @@ async function getTheme() {
   return data;
 }
 
-// Active Entities scoped to the logged-in user's company + its downline —
-// found via each Entity's Authorised Person -> their company (user_roles).
-// Not using reporting_company_id (being dropped going forward).
 async function getActiveEntityCount(): Promise<number> {
   const session = await getServerSession();
   if (!session) return 0;
-
-  let companyIds: string[] | null = null; // null = Super Admin, no scoping
-
+  let companyIds: string[] | null = null;
   if (!session.is_super_admin) {
-    const { data: roleRow } = await supabaseAdmin
-      .from("user_roles").select("company_id")
-      .eq("user_id", session.user_id).eq("is_active", true).maybeSingle();
+    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("company_id").eq("user_id", session.user_id).eq("is_active", true).maybeSingle();
     if (!roleRow?.company_id) return 0;
     companyIds = await getDownlineIds(roleRow.company_id);
   }
-
   if (companyIds) {
-    const { data: userRows } = await supabaseAdmin
-      .from("user_roles").select("user_id").in("company_id", companyIds).eq("is_active", true);
+    const { data: userRows } = await supabaseAdmin.from("user_roles").select("user_id").in("company_id", companyIds).eq("is_active", true);
     const userIds = [...new Set((userRows || []).map((r: any) => r.user_id))];
     if (userIds.length === 0) return 0;
-    const { count } = await supabaseAdmin
-      .from("entities").select("*", { count: "exact", head: true }).eq("status", "active").in("user_id", userIds);
+    const { count } = await supabaseAdmin.from("entities").select("*", { count: "exact", head: true }).eq("status", "active").in("user_id", userIds);
     return count ?? 0;
   }
-
   const { count } = await supabaseAdmin.from("entities").select("*", { count: "exact", head: true }).eq("status", "active");
   return count ?? 0;
 }
 
+// Help Desk totals — assuming help_desk_tickets.status = 'closed' means
+// resolved (everything else counts as Open). Flag if this doesn't match.
+async function getHelpDeskSummary(): Promise<{ total: number; open: number }> {
+  const { count: total } = await supabaseAdmin.from("help_desk_tickets").select("*", { count: "exact", head: true });
+  const { count: open } = await supabaseAdmin.from("help_desk_tickets").select("*", { count: "exact", head: true }).neq("status", "closed");
+  return { total: total ?? 0, open: open ?? 0 };
+}
+
 export default async function AdminEcosystemPage() {
   const session = await getServerSession();
-  const [theme, entityCount, ticketSummary] = await Promise.all([getTheme(), getActiveEntityCount(), getTicketSummary(session)]);
+  const [theme, entityCount, ticketSummary, helpDeskSummary] = await Promise.all([
+    getTheme(), getActiveEntityCount(), getTicketSummary(session), getHelpDeskSummary()
+  ]);
   const radius = theme?.global_border_radius || "12px";
   const textPrimary = theme?.color_text_primary || "#111827";
   const textMuted = theme?.color_text_muted || "#9ca3af";
@@ -67,6 +66,12 @@ export default async function AdminEcosystemPage() {
       href: "/admin/ecosystem/support", meta: `Total : ${ticketSummary.total}  |  Open : ${ticketSummary.open}`,
       badge: ticketSummary.open > 0 ? "Open Tickets" : "All Clear",
       badgeColor: ticketSummary.open > 0 ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700", icon: "🎫",
+    },
+    {
+      title: "Help Desk", description: "General support tickets raised by staff and entities",
+      href: "/admin/ecosystem/helpdesk", meta: `Total : ${helpDeskSummary.total}  |  Open : ${helpDeskSummary.open}`,
+      badge: helpDeskSummary.open > 0 ? "Open Tickets" : "All Clear",
+      badgeColor: helpDeskSummary.open > 0 ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700", icon: "🛎️",
     },
   ];
 

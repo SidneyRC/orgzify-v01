@@ -78,7 +78,7 @@ html, body {
   color: var(--color-text-primary);
   font-size: 0.875rem;
   line-height: 1.6;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ── Focus Ring — global consistent style ── */

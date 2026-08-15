@@ -7,7 +7,8 @@ import { ThemeProvider, Theme } from "@/lib/ThemeContext";
 import { Menu, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 
 const CARDS_PER_SLIDE = 2;
-const carouselCards = [
+type CarouselCard = { id: string | number; title: string; date: string; location: string; gradient: string; href: string };
+const adminCarouselCards: CarouselCard[] = [
   { id: 1, title: "Summer Drawing Championship 2026", date: "15 June 2026", location: "Chennai", gradient: "from-blue-600 to-blue-900", href: "#" },
   { id: 2, title: "Inter-School Chess Tournament", date: "20 July 2026", location: "Bangalore", gradient: "from-violet-600 to-blue-900", href: "#" },
   { id: 3, title: "Yoga & Wellness Fest 2026", date: "3 August 2026", location: "Coimbatore", gradient: "from-teal-600 to-blue-900", href: "#" },
@@ -21,22 +22,44 @@ type UserData = {
   entities: { id: string; process_id: string; display_name: string; status: string }[];
 }
 
-function useCarousel(cardsPerSlide: number) {
-  const total = Math.ceil(carouselCards.length / cardsPerSlide);
+// Fetches this organiser's own Live events for the entity carousel — stays
+// blank (no dummy content) if they have none yet, e.g. before Venue/Schedule
+// (Build 1B) exists, since no event can reach Live status without it.
+function useEntityCarouselCards(entityId?: string, entitySlug?: string) {
+  const [cards, setCards] = useState<CarouselCard[]>([]);
+  useEffect(() => {
+    if (!entityId || !entitySlug) return;
+    fetch(`/biz/events/api?type=list&entity_id=${entityId}&tab=live&limit=10`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const rows = json?.data || [];
+        setCards(rows.map((e: any) => ({
+          id: e.id, title: e.name, date: '', location: '',
+          gradient: 'from-blue-600 to-blue-900', href: `/biz/${entitySlug}/events/create?ref=${e.process_id}`
+        })));
+      });
+  }, [entityId, entitySlug]);
+  return cards;
+}
+
+function useCarousel(cards: CarouselCard[], cardsPerSlide: number) {
+  const total = Math.max(1, Math.ceil(cards.length / cardsPerSlide));
   const [idx, setIdx] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const start = useCallback(() => {
     if (timer.current) clearInterval(timer.current);
+    if (cards.length <= cardsPerSlide) return;
     timer.current = setInterval(() => setIdx(p => (p + 1) % total), 4000);
-  }, [total]);
+  }, [total, cards.length, cardsPerSlide]);
   useEffect(() => { start(); return () => { if (timer.current) clearInterval(timer.current); }; }, [start]);
   const prev = () => { setIdx(p => (p - 1 + total) % total); start(); };
   const next = () => { setIdx(p => (p + 1) % total); start(); };
-  const visible = carouselCards.slice(idx * cardsPerSlide, idx * cardsPerSlide + cardsPerSlide);
-  return { visible, prev, next };
+  const visible = cards.slice(idx * cardsPerSlide, idx * cardsPerSlide + cardsPerSlide);
+  return { visible, prev, next, hasCards: cards.length > 0 };
 }
 
-function CarouselUI({ visible, prev, next }: ReturnType<typeof useCarousel>) {
+function CarouselUI({ visible, prev, next, hasCards }: ReturnType<typeof useCarousel>) {
+  if (!hasCards) return null;
   return (
     <div className="flex items-center gap-1.5 w-full">
       <button onClick={prev} className="shrink-0 p-1 text-gray-400 hover:text-blue-900 rounded transition-colors">
@@ -44,11 +67,11 @@ function CarouselUI({ visible, prev, next }: ReturnType<typeof useCarousel>) {
       </button>
       <div className="flex-1 flex gap-2 overflow-hidden">
         {visible.map(card => (
-          <a key={card.id} href={card.href} target="_blank" rel="noopener noreferrer"
+          <a key={card.id} href={card.href}
             className={`flex-1 flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-gradient-to-r ${card.gradient} text-white overflow-hidden min-w-0`}>
             <div className="min-w-0">
               <div className="text-xs font-semibold truncate leading-tight">{card.title}</div>
-              <div className="text-[10px] text-blue-200 mt-0.5">{card.date} · {card.location}</div>
+              {(card.date || card.location) && <div className="text-[10px] text-blue-200 mt-0.5">{card.date} · {card.location}</div>}
             </div>
             <ExternalLink size={12} className="shrink-0 opacity-60" />
           </a>
@@ -61,16 +84,18 @@ function CarouselUI({ visible, prev, next }: ReturnType<typeof useCarousel>) {
   );
 }
 
-function AdminTopBar({ initialName, initialAvatar, onHamburgerClick, onCompanySelect }: {
+function AdminTopBar({ initialName, initialAvatar, onHamburgerClick, onCompanySelect, hideCarousel, entityId, entitySlug }: {
   initialName: string; initialAvatar: string;
   onHamburgerClick: () => void;
   onCompanySelect: (company_id: string, slug: string) => void;
+  hideCarousel?: boolean; entityId?: string; entitySlug?: string;
 }) {
   const [userData, setUserData] = useState<UserData>({
     name: initialName, email: '', avatar: initialAvatar,
     is_super_admin: false, companies: [], entities: [],
   });
-  const carousel = useCarousel(CARDS_PER_SLIDE);
+  const entityCards = useEntityCarouselCards(entityId, entitySlug);
+  const carousel = useCarousel(hideCarousel ? entityCards : adminCarouselCards, CARDS_PER_SLIDE);
 
   useEffect(() => {
     fetch('/profile/me')
@@ -100,10 +125,11 @@ function AdminTopBar({ initialName, initialAvatar, onHamburgerClick, onCompanySe
       <button onClick={onHamburgerClick} className="md:hidden p-2 text-gray-500 hover:text-blue-900 rounded-md hover:bg-gray-100 transition-colors">
         <Menu size={20} />
       </button>
-      <div className="hidden md:flex flex-1 items-center overflow-hidden">
-        <CarouselUI {...carousel} />
+      <div className="flex-1 flex items-center overflow-hidden">
+        <div className="hidden md:flex w-full items-center overflow-hidden">
+          <CarouselUI {...carousel} />
+        </div>
       </div>
-      <div className="flex-1 md:hidden" />
       <NavUserDropdown
         user={{ name: userData.name, email: userData.email, avatar: userData.avatar, is_super_admin: userData.is_super_admin, companies: userData.companies, entities: userData.entities }}
         onLogout={handleLogout}
@@ -113,8 +139,10 @@ function AdminTopBar({ initialName, initialAvatar, onHamburgerClick, onCompanySe
   );
 }
 
-function MobileCarouselStrip() {
-  const carousel = useCarousel(1);
+function MobileCarouselStrip({ hidden, entityId, entitySlug }: { hidden?: boolean; entityId?: string; entitySlug?: string }) {
+  const entityCards = useEntityCarouselCards(entityId, entitySlug);
+  const carousel = useCarousel(hidden ? entityCards : adminCarouselCards, 1);
+  if (!carousel.hasCards) return null;
   return (
     <div className="md:hidden bg-white border-b border-gray-200 px-3 py-2.5 flex items-center shrink-0">
       <CarouselUI {...carousel} />
@@ -124,30 +152,33 @@ function MobileCarouselStrip() {
 
 // Reads the active context cookie (via /company/context) so the sidebar shows
 // the right company name/role/rights even when the page itself didn't pass them.
-function useCompanyContext(companyName?: string) {
+function useCompanyContext(skip: boolean) {
   const [ctx, setCtx] = useState<{ name?: string; role?: string; rights?: string[]; slug?: string } | null>(null);
 
   useEffect(() => {
-    if (companyName) return; // page already gave us this directly, skip the extra call
+    if (skip) return; // page already gave us this directly (company or entity mode), skip the extra call
     fetch('/company/context')
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         if (json?.type === 'company') setCtx({ name: json.company_name, role: json.role, rights: json.rights, slug: json.slug });
         else setCtx(null);
       });
-  }, [companyName]);
+  }, [skip]);
 
   return ctx;
 }
 
-export default function AdminShell({ initialName, initialAvatar, children, companyName, roleLabel, rights, slug }: {
+type EntityModuleAccess = { pages: boolean; academy: boolean; events: boolean };
+
+export default function AdminShell({ initialName, initialAvatar, children, companyName, roleLabel, rights, slug, entityName, entityId, entitySlug, entityModuleAccess, hideSidebar }: {
   initialName: string; initialAvatar: string; children: React.ReactNode;
   companyName?: string; roleLabel?: string; rights?: string[]; slug?: string;
+  entityName?: string; entityId?: string; entitySlug?: string; entityModuleAccess?: EntityModuleAccess; hideSidebar?: boolean;
 }) {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState<Theme | null>(null);
-  const ctx = useCompanyContext(companyName);
+  const ctx = useCompanyContext(!!companyName || !!entityName);
 
   const effectiveCompanyName = companyName ?? ctx?.name;
   const effectiveRoleLabel = roleLabel ?? ctx?.role;
@@ -173,16 +204,20 @@ export default function AdminShell({ initialName, initialAvatar, children, compa
 
   return (
     <ThemeProvider initial={theme}>
-      <div className="flex h-screen overflow-hidden" style={{ backgroundColor: theme?.page_bg ?? '#f9fafb' }}>
-        <AdminSidebar expanded={sidebarExpanded} setExpanded={setSidebarExpanded}
-          mobileOpen={mobileOpen} setMobileOpen={setMobileOpen}
-          companyName={effectiveCompanyName} roleLabel={effectiveRoleLabel} rights={effectiveRights} slug={effectiveSlug} />
+      <div className="flex min-h-screen" style={{ backgroundColor: theme?.page_bg ?? '#f9fafb' }}>
+        {!hideSidebar && (
+          <AdminSidebar expanded={sidebarExpanded} setExpanded={setSidebarExpanded}
+            mobileOpen={mobileOpen} setMobileOpen={setMobileOpen}
+            companyName={effectiveCompanyName} roleLabel={effectiveRoleLabel} rights={effectiveRights} slug={effectiveSlug}
+            entityName={entityName} entitySlug={entitySlug} entityModuleAccess={entityModuleAccess} />
+        )}
         <div className="flex-1 flex flex-col min-w-0">
           <AdminTopBar initialName={initialName} initialAvatar={initialAvatar}
             onHamburgerClick={() => setMobileOpen(true)}
-            onCompanySelect={handleCompanySelect} />
-          <MobileCarouselStrip />
-          <main className="flex-1 overflow-auto p-4 md:p-6">
+            onCompanySelect={handleCompanySelect}
+            hideCarousel={!!entityName} entityId={entityId} entitySlug={entitySlug} />
+          <MobileCarouselStrip hidden={!!entityName} entityId={entityId} entitySlug={entitySlug} />
+          <main className="flex-1" style={{ paddingTop: '1.5rem', paddingBottom: '1.5rem', paddingLeft: 'clamp(1rem, 3vw, 3rem)', paddingRight: 'clamp(1rem, 3vw, 3rem)' }}>
             {children}
           </main>
         </div>

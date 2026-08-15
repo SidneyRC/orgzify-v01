@@ -25,11 +25,13 @@ export default function OREV1047DLocationTypeahead({ label, level, parent_id, co
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${error ? '#ef4444' : theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const dropStyle = { backgroundColor: theme?.dropdown_bg || '#fff', border: `1px solid ${theme?.dropdown_border || '#e5e7eb'}`, borderRadius: radius }
+  const highlightBg = theme?.dropdown_hover_bg || '#f9fafb'
 
   const [query, setQuery] = useState(value?.name || '')
   const [results, setResults] = useState<Location[]>([])
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => { setQuery(value?.name || '') }, [value])
@@ -45,6 +47,7 @@ export default function OREV1047DLocationTypeahead({ label, level, parent_id, co
   const search = async (q: string) => {
     setQuery(q)
     onChange(null)
+    setActiveIndex(-1)
     if (q.length < 1) { setResults([]); setOpen(false); return }
     const res = await fetch(API, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -59,6 +62,7 @@ export default function OREV1047DLocationTypeahead({ label, level, parent_id, co
     onChange({ id: loc.id, name: loc.name })
     setQuery(loc.name)
     setOpen(false)
+    setActiveIndex(-1)
     setResults([])
   }
 
@@ -70,11 +74,27 @@ export default function OREV1047DLocationTypeahead({ label, level, parent_id, co
       body: JSON.stringify({ action: 'add_location', name: query.trim(), level, parent_id: parent_id || null, country_id: country_id || null })
     })
     const json = await res.json()
-    if (json.data) { onChange({ id: json.data.id, name: json.data.name }); setQuery(json.data.name); setOpen(false) }
+    if (json.data) { onChange({ id: json.data.id, name: json.data.name }); setQuery(json.data.name); setOpen(false); setActiveIndex(-1) }
     setAdding(false)
   }
 
   const showAdd = query.trim().length > 0 && !results.find(r => r.name.toLowerCase() === query.trim().toLowerCase())
+  const listLength = results.length + (showAdd ? 1 : 0)
+
+  // Keyboard navigation: Down/Up highlight through the results (then the
+  // "+ Add" row last), Enter picks whatever is highlighted, Escape closes
+  // the list without picking anything. Mirrors PincodeTypeahead's fix.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open || listLength === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(i => (i + 1) % listLength) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(i => (i - 1 + listLength) % listLength) }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (activeIndex < 0) return
+      if (activeIndex < results.length) select(results[activeIndex])
+      else addNew()
+    } else if (e.key === 'Escape') { setOpen(false); setActiveIndex(-1) }
+  }
 
   return (
     <div className="flex flex-col gap-1" ref={ref}>
@@ -84,22 +104,27 @@ export default function OREV1047DLocationTypeahead({ label, level, parent_id, co
           value={query}
           onChange={e => search(e.target.value)}
           onFocus={() => { if (query.length > 0 && results.length > 0) setOpen(true) }}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder || `Search ${label.toLowerCase()}`}
           className="w-full h-10 px-3 text-sm focus:outline-none"
           style={inputStyle}
         />
         {open && (results.length > 0 || showAdd) && (
           <div className="absolute z-20 w-full mt-1 shadow-lg max-h-48 overflow-y-auto" style={dropStyle}>
-            {results.map(r => (
+            {results.map((r, i) => (
               <div key={r.id}
                 onMouseDown={e => { e.preventDefault(); select(r) }}
-                className="px-3 py-2.5 text-sm cursor-pointer hover:bg-gray-50">
+                onMouseEnter={() => setActiveIndex(i)}
+                className="px-3 py-2.5 text-sm cursor-pointer"
+                style={{ backgroundColor: activeIndex === i ? highlightBg : undefined }}>
                 {r.name}
               </div>
             ))}
             {showAdd && (
               <div onMouseDown={e => { e.preventDefault(); addNew() }}
-                className="px-3 py-2.5 text-sm cursor-pointer text-blue-600 hover:bg-blue-50 font-medium border-t border-gray-100">
+                onMouseEnter={() => setActiveIndex(results.length)}
+                className="px-3 py-2.5 text-sm cursor-pointer text-blue-600 font-medium border-t border-gray-100"
+                style={{ backgroundColor: activeIndex === results.length ? highlightBg : undefined }}>
                 {adding ? 'Adding…' : `+ Add "${query.trim()}"`}
               </div>
             )}

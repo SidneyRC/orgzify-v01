@@ -1,3 +1,4 @@
+// GOES IN: app/(admin)/admin/setup/roles/api/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSession } from '@/lib/auth'
@@ -6,7 +7,7 @@ import { getActiveCompanyId } from '@/lib/activeCompanyContext'
 import { ADMIN_MODULES as MODULES, ADMIN_MODULE_LABELS as MODULE_LABELS } from '@/lib/adminModules'
 
 const MASTER_COMPANY_ID = '11111111-1111-1111-1111-111111111111'
-const FLAGS = ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_archive', 'can_download_non_sensitive', 'can_download_sensitive', 'can_overwrite_edit', 'can_approve']
+const FLAGS = ['can_view', 'can_create', 'can_edit', 'can_delete', 'can_archive', 'can_download_non_sensitive', 'can_download_sensitive', 'can_overwrite_edit', 'can_approve', 'can_restore', 'can_activate', 'can_hard_delete', 'can_sync']
 
 async function scopedCompanyIds(req: NextRequest, session: any) {
   const rawContext = decodeURIComponent(req.cookies.get('orgzify_context')?.value || '')
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: 'Could not load roles.' }, { status: 500 })
 
   const roleIds = (roles || []).map((r: any) => r.id)
-  const { data: perms } = roleIds.length ? await supabaseAdmin.from('role_permissions').select('role_id, module, can_view, can_create, can_edit, can_delete, can_archive, can_download_non_sensitive, can_download_sensitive, can_overwrite_edit, can_approve').in('role_id', roleIds) : { data: [] }
+  const { data: perms } = roleIds.length ? await supabaseAdmin.from('role_permissions').select(['role_id', 'module', ...FLAGS].join(', ')).in('role_id', roleIds) : { data: [] }
 
   const modulesByRole: Record<string, string[]> = {}
   ;(perms || []).forEach((p: any) => {

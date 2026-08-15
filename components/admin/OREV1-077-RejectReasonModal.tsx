@@ -11,8 +11,8 @@ const LABELS: Record<StatusCode, { action: string; confirmClass: string }> = {
   blocked: { action: "Block", confirmClass: "bg-gray-800 hover:bg-black" },
 };
 
-export default function RejectReasonModal({ entityName, statusCode, onCancel, onConfirm }: {
-  entityName: string; statusCode: StatusCode; onCancel: () => void; onConfirm: (reasonId: string | null, note: string) => void;
+export default function RejectReasonModal({ entityName, statusCode, apiBase = "/admin/ecosystem/entities/api", onCancel, onConfirm }: {
+  entityName: string; statusCode: StatusCode; apiBase?: string; onCancel: () => void; onConfirm: (reasonId: string | null, note: string) => void;
 }) {
   const [reasons, setReasons] = useState<Reason[]>([]);
   const [reasonId, setReasonId] = useState("");
@@ -20,9 +20,9 @@ export default function RejectReasonModal({ entityName, statusCode, onCancel, on
   const { action, confirmClass } = LABELS[statusCode];
 
   useEffect(() => {
-    fetch(`/admin/ecosystem/entities/api?type=status_reasons&status_code=${statusCode}`)
+    fetch(`${apiBase}?type=status_reasons&status_code=${statusCode}`)
       .then(r => r.json()).then(j => setReasons(j.data || []));
-  }, [statusCode]);
+  }, [statusCode, apiBase]);
 
   const canConfirm = !!reasonId;
 
