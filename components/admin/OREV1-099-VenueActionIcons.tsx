@@ -16,9 +16,9 @@ const IconBlock = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24"
 type Props = {
   r: VenueRow
   canEdit?: boolean; canDelete?: boolean; canRestore?: boolean; canHardDelete?: boolean; canApprove?: boolean
-  onApprove: (r: VenueRow) => void
+  onApprove: (r: any) => void
   onOpenReview: (id: string, action: 'reject' | 'suspend' | 'block') => void
-  onDeleteOrRestore: (r: VenueRow, action: 'delete' | 'restore' | 'hard_delete') => void
+  onDeleteOrRestore: (r: any, action: 'delete' | 'restore' | 'hard_delete') => void
 }
 
 export default function OREV1099VenueActionIcons({ r, canEdit = true, canDelete = true, canRestore = true, canHardDelete = true, canApprove = true, onApprove, onOpenReview, onDeleteOrRestore }: Props) {
