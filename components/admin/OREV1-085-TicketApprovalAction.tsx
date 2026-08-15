@@ -98,7 +98,7 @@ export default function OREV1085TicketApprovalAction({ ticketId, entityId, entit
           entityName={entityName}
           statusCode="rejected"
           onCancel={() => setShowReject(false)}
-          onConfirm={(reasonId, note) => handleRejectConfirm(reasonId, note)}
+          onConfirm={(reasonId, note) => handleRejectConfirm(reasonId ?? undefined, note)}
         />
       )}
     </div>
