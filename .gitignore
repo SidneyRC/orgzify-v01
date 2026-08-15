@@ -1,2 +1,5 @@
 .tmp.driveupload/ 
-dir
+dir 
+.env.local 
+.next/ 
+node_modules/

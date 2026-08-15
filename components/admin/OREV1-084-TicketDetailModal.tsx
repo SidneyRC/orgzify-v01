@@ -83,7 +83,7 @@ export default function OREV1084TicketDetailModal({ ticketId, canViewAuditTrail 
 
           <OREV1087HelpDeskEditPanel currentStatus={ticket.status_code} statuses={statuses} saving={saving} onCancel={onClose} onSave={handleSave} />
 
-          <OREV1086HelpDeskAttachments ticketId={ticketId} attachments={attachments} canUpload={true} onChanged={load} />
+          <OREV1086HelpDeskAttachments ticketId={ticketId} attachments={attachments} canEdit={true} onChanged={load} />
 
           <div>
             <p className="text-sm font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Activity</p>
