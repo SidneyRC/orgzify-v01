@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
     const data = await Promise.all(uniqueIds.map(async (id: string) => {
       const row = staffRows.find((s: any) => s.id === id)
       const d = await staffDetails(id)
-      return { staff_id: id, ...d, unlinked: !row.user_id }
+      return { staff_id: id, ...d, unlinked: !row?.user_id }
     }))
     return NextResponse.json({ data })
   }
