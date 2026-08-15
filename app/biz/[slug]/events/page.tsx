@@ -138,7 +138,7 @@ export default function EventsListPage() {
                 {ev.status === 'active' && (
                   <button onClick={e => handleToggleBooking(ev, e)} title={ev.booking_open ? 'Turn booking off' : 'Turn booking on'}
                     className="relative inline-flex h-6 w-11 items-center rounded-full transition shrink-0"
-                    style={{ backgroundColor: ev.booking_open ? '#22c55e' : (theme?.input_disabled_bg || '#e5e7eb') }}>
+                    style={{ backgroundColor: ev.booking_open ? '#22c55e' : (theme?.btn_disabled_bg || '#e5e7eb') }}>
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${ev.booking_open ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 )}

@@ -142,7 +142,7 @@ export default function OREV1058EntitySection3({ entity, open, onToggle, onSaved
                 <button type="button"
                   onClick={() => setAnswer(r.document_type_id, { has_document: !a.has_document, document_number: !a.has_document ? a.document_number : '' })}
                   className="relative inline-flex h-6 w-11 items-center rounded-full transition shrink-0"
-                  style={{ backgroundColor: a.has_document ? '#22c55e' : (theme?.input_disabled_bg || '#e5e7eb') }}>
+                  style={{ backgroundColor: a.has_document ? '#22c55e' : (theme?.btn_disabled_bg || '#e5e7eb') }}>
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${a.has_document ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>

@@ -10,7 +10,7 @@ export default function OREV1100BEventStepperHeader({ steps, currentStep, maxRea
   const { theme } = useTheme()
   const doneColor = '#22c55e'
   const currentColor = theme?.btn_bg || '#1e3a8a'
-  const upcomingColor = theme?.input_disabled_bg || '#e5e7eb'
+  const upcomingColor = theme?.btn_disabled_bg || '#e5e7eb'
 
   return (
     <div className="flex items-center overflow-x-auto pb-2 mb-6 -mx-2 px-2">

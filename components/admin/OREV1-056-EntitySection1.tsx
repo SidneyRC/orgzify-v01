@@ -23,7 +23,7 @@ export default function OREV1056EntitySection1({ person, entityTypeId, onEntityT
   const { theme } = useTheme()
   const router = useRouter()
   const radius = theme?.global_border_radius || '12px'
-  const readOnlyStyle = { backgroundColor: theme?.input_disabled_bg || '#f3f4f6', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
+  const readOnlyStyle = { backgroundColor: theme?.btn_disabled_bg || '#f3f4f6', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const primaryBtn = { backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: radius }
   const outlineBtn = { backgroundColor: theme?.btn_outline_bg || '#fff', color: theme?.btn_outline_text || '#4b5563', border: `1px solid ${theme?.btn_outline_border || '#e5e7eb'}`, borderRadius: radius }

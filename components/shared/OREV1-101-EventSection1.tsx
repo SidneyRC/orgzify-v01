@@ -171,7 +171,7 @@ export default function OREV1101EventSection1({ event, entityId, open, onToggle,
             </div>
             <div className="flex items-center justify-between sm:pt-5">
               <label className="text-xs text-gray-500">Refund Allowed</label>
-              <button type="button" onClick={() => setRefund(!refund)} className="relative inline-flex h-6 w-11 items-center rounded-full transition shrink-0" style={{ backgroundColor: refund ? '#22c55e' : (theme?.input_disabled_bg || '#e5e7eb') }}>
+              <button type="button" onClick={() => setRefund(!refund)} className="relative inline-flex h-6 w-11 items-center rounded-full transition shrink-0" style={{ backgroundColor: refund ? '#22c55e' : (theme?.btn_disabled_bg || '#e5e7eb') }}>
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${refund ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
