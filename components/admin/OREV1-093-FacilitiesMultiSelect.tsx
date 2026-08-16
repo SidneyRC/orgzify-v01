@@ -34,7 +34,7 @@ export default function OREV1093FacilitiesMultiSelect({ value, onChange, label =
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const dropStyle = { backgroundColor: theme?.dropdown_bg || '#fff', border: `1px solid ${theme?.dropdown_border || '#e5e7eb'}`, borderRadius: radius }
   const highlightBg = theme?.dropdown_hover_bg || '#f9fafb'
-  const chipStyle = { backgroundColor: theme?.chip_bg || '#eff6ff', color: theme?.chip_text || '#1e3a8a', borderRadius: radius }
+  const chipStyle = { backgroundColor: theme?.color_selected || '#eff6ff', color: theme?.color_text_primary || '#1e3a8a', borderRadius: radius }
 
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
