@@ -115,7 +115,7 @@ export default function OREV1100EventRegistration({ entityId, entitySlug }: { en
             onSaved={updated => { setEvent(updated); goTo(5, 5) }} onBack={() => goTo(3)} onClose={handleClose} />
         )}
         {currentStep === 5 && isPhysical && event && (
-          <OREV1111EventStepVenue eventId={event.id} entityId={entityId} locked={isLocked}
+          <OREV1111EventStepVenue eventId={event.id} entityId={entityId} entitySlug={entitySlug} processId={event.process_id} locked={isLocked}
             onContinue={() => goTo(6, 6)} onBack={() => goTo(4)} onClose={handleClose} />
         )}
         {currentStep === scheduleStep && event && (
