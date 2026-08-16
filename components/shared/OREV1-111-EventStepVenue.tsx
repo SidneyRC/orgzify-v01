@@ -28,7 +28,7 @@ export default function OREV1111EventStepVenue({ eventId, entityId, entitySlug, 
   const [activeIndex, setActiveIndex] = useState(-1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLFieldSetElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = () => { fetch(`${API}?event_id=${eventId}`).then(r => r.json()).then(j => { console.log('VENUE LOAD RESULT:', j); setSelected(j.selected || []); setLoading(false) }) }
