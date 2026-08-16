@@ -14,7 +14,7 @@ export default function EntityDashboardOfficePanel({ office, theme, radius }: {
   const linkColor = theme?.link_color || "#1e3a5f";
   const dividerColor = theme?.divider_color || "#f3f4f6";
 
-  const contacts = office?.contacts && [
+  const contacts: { label: string; email: string; phone: string }[] | undefined = office?.contacts && [
     { label: "Customer Care", email: office.contacts.customer_care_email, phone: office.contacts.customer_care_phone },
     { label: "Escalation", email: office.contacts.escalation_email, phone: office.contacts.escalation_phone },
     { label: "Nodal Officer", email: office.contacts.nodal_email, phone: office.contacts.nodal_phone },
