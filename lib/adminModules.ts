@@ -1,12 +1,13 @@
 // GOES IN: lib/adminModules.ts
-export const ADMIN_MODULES = ['companies', 'location', 'assign_roles', 'geofence', 'themes', 'roles', 'entities', 'support', 'help_desk', 'categories', 'event_tags_format', 'countries', 'venue', 'events'] as const
+export const ADMIN_MODULES = ['companies', 'location', 'assign_roles', 'geofence', 'themes', 'roles', 'entities', 'support', 'help_desk', 'categories', 'event_tags_format', 'countries', 'venue', 'events', 'sponsors', 'artists'] as const
 
 export const ADMIN_MODULE_LABELS: Record<string, string> = {
   companies: 'Companies', location: 'Location', assign_roles: 'Assign Roles',
   geofence: 'Geofence', themes: 'Themes', roles: 'Roles & Rights',
   entities: 'Entities', support: 'Support', help_desk: 'Help Desk',
   categories: 'Help Desk Categories', event_tags_format: 'Event Tags Format',
-  countries: 'Countries', venue: 'Venue', events: 'Events'
+  countries: 'Countries', venue: 'Venue', events: 'Events',
+  sponsors: 'Sponsors', artists: 'Artists'
 }
 
 // Some pages don't support every standard right — e.g. Geofence rows are
@@ -30,6 +31,8 @@ export const ADMIN_MODULE_EXTRA_RIGHTS: Record<string, string[]> = {
   categories: ['can_restore', 'can_hard_delete'],
   event_tags_format: ['can_restore'],
   countries: ['can_sync'],
+  sponsors: ['can_approve', 'can_hard_delete'],
+  artists: ['can_approve', 'can_hard_delete'],
 }
 
 // RESERVED rights (2-tier rule, locked): usable by whoever holds them, but never

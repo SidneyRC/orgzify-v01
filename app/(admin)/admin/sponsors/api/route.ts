@@ -1,7 +1,8 @@
-// THIS FILE GOES IN: app\(admin)\admin\sponsors\api\route.ts (REPLACES existing file)
+// THIS FILE GOES IN: app/(admin)/admin/sponsors/api/route.ts (REPLACES existing file)
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { hasModuleRight } from '@/lib/adminModuleRights'
 
 const MODULE_CODE = 'sponsors'
 
@@ -36,6 +37,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!(await hasModuleRight(req, session, MODULE_CODE, 'can_create'))) {
+    return NextResponse.json({ error: 'You do not have permission to add sponsors.' }, { status: 403 })
+  }
 
   const { name, logo_url } = await req.json()
   if (!name || !logo_url) return NextResponse.json({ error: 'Name and logo are required' }, { status: 400 })
@@ -55,6 +59,9 @@ export async function PATCH(req: NextRequest) {
 
   if (status) {
     if (!['approved', 'rejected'].includes(status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+    if (!(await hasModuleRight(req, session, MODULE_CODE, 'can_approve'))) {
+      return NextResponse.json({ error: 'You do not have permission to approve or reject sponsors.' }, { status: 403 })
+    }
     const { error } = await supabaseAdmin.from('sponsors').update({ status }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (status === 'rejected') {
@@ -63,6 +70,10 @@ export async function PATCH(req: NextRequest) {
       })
     }
     return NextResponse.json({ data: true })
+  }
+
+  if (!(await hasModuleRight(req, session, MODULE_CODE, 'can_edit'))) {
+    return NextResponse.json({ error: 'You do not have permission to edit sponsors.' }, { status: 403 })
   }
 
   if (typeof is_enabled === 'boolean') {
@@ -81,4 +92,25 @@ export async function PATCH(req: NextRequest) {
   }
 
   return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!(await hasModuleRight(req, session, MODULE_CODE, 'can_hard_delete'))) {
+    return NextResponse.json({ error: 'You do not have permission to delete sponsors.' }, { status: 403 })
+  }
+
+  const id = req.nextUrl.searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const { data: sponsor } = await supabaseAdmin.from('sponsors').select('status').eq('id', id).maybeSingle()
+  if (!sponsor) return NextResponse.json({ error: 'Sponsor not found' }, { status: 404 })
+  if (sponsor.status === 'approved') {
+    return NextResponse.json({ error: 'Approved sponsors cannot be deleted yet — this will be enabled once event-linkage checks are built.' }, { status: 400 })
+  }
+
+  const { error } = await supabaseAdmin.from('sponsors').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ data: true })
 }

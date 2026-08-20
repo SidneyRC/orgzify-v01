@@ -1,3 +1,4 @@
+// THIS FILE GOES IN: components/shared/OREV1-113-EventStepBookingMethod.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
@@ -29,7 +30,7 @@ export default function OREV1113EventStepBookingMethod({ eventId, locked, onCont
       setVenues(j.venues || [])
       const urls: Record<string, string> = {}
       ;(j.venues || []).forEach((v: any) => v.event_venue_dates?.forEach((d: any) => d.event_venue_times?.forEach((t: any) => {
-        urls[t.id] = t.event_venue_time_urls?.[0]?.booking_url || ''
+        urls[t.id] = t.event_venue_time_urls?.booking_url || ''
       })))
       setTimeUrls(urls)
       setLoading(false)
@@ -72,6 +73,8 @@ export default function OREV1113EventStepBookingMethod({ eventId, locked, onCont
         <p className="text-xs mt-0.5" style={{ color: theme?.color_text_muted || '#9ca3af' }}>Choose how customers will book tickets for this event</p>
       </div>
 
+      {locked && <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-xs text-yellow-700">This event is awaiting Admin review and can't be edited right now.</div>}
+
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden opacity-60">
         <div className="px-6 py-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-700">Orgzify Payment Gateway <span className="text-xs font-normal text-gray-400 ml-1">(Coming Soon)</span></p>
@@ -88,12 +91,16 @@ export default function OREV1113EventStepBookingMethod({ eventId, locked, onCont
         <div className="hidden sm:flex sm:justify-end sm:gap-2">
           <button onClick={onBack} style={outlineBtn} className="text-sm font-medium px-4 py-2.5 hover:opacity-90 transition whitespace-nowrap">← Back</button>
           <button onClick={onClose} style={outlineBtn} className="text-sm font-medium px-4 py-2.5 hover:opacity-90 transition whitespace-nowrap">✕ Close</button>
-          <button onClick={handleContinue} disabled={!canContinue() || saving} style={primaryBtn} className="text-sm font-medium px-4 py-2.5 hover:opacity-90 transition disabled:opacity-50 whitespace-nowrap">{saving ? 'Saving…' : 'Next: Tickets →'}</button>
+          {!locked
+            ? <button onClick={handleContinue} disabled={!canContinue() || saving} style={primaryBtn} className="text-sm font-medium px-4 py-2.5 hover:opacity-90 transition disabled:opacity-50 whitespace-nowrap">{saving ? 'Saving…' : 'Next: Tickets →'}</button>
+            : <button onClick={onContinue} style={primaryBtn} className="text-sm font-medium px-4 py-2.5 hover:opacity-90 transition whitespace-nowrap">Next →</button>}
         </div>
         <div className="flex gap-1.5 sm:hidden">
           <button onClick={onBack} style={outlineBtn} className="flex-1 text-xs font-medium py-2 px-1 hover:opacity-90 transition whitespace-nowrap">← Back</button>
           <button onClick={onClose} style={outlineBtn} className="flex-1 text-xs font-medium py-2 px-1 hover:opacity-90 transition whitespace-nowrap">✕ Close</button>
-          <button onClick={handleContinue} disabled={!canContinue() || saving} style={primaryBtn} className="flex-1 text-xs font-medium py-2 px-1 hover:opacity-90 transition disabled:opacity-50 whitespace-nowrap">{saving ? '…' : 'Next →'}</button>
+          {!locked
+            ? <button onClick={handleContinue} disabled={!canContinue() || saving} style={primaryBtn} className="flex-1 text-xs font-medium py-2 px-1 hover:opacity-90 transition disabled:opacity-50 whitespace-nowrap">{saving ? '…' : 'Next →'}</button>
+            : <button onClick={onContinue} style={primaryBtn} className="flex-1 text-xs font-medium py-2 px-1 hover:opacity-90 transition whitespace-nowrap">Next →</button>}
         </div>
       </div>
     </div>

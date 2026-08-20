@@ -27,12 +27,13 @@ export default function OREV1114BTicketCategoryForm({ ticket, locked, onSave, on
     description: ticket?.description || '', goodies: ticket?.goodies || [] as string[],
     sale_window_enabled: ticket?.sale_window_enabled || false, sale_start: ticket?.sale_start || '', sale_end: ticket?.sale_end || '',
   })
-  const [goodieInput, setGoodieInput] = useState('')
+  const [goodieInput, setGoodieInput] = useState(''); const [errors, setErrors] = useState<any>({})
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const labelStyle = { color: theme?.color_text_muted || '#9ca3af' }
   const set = (k: string, v: any) => setF(p => ({ ...p, [k]: v }))
-  const handleSave = () => onSave({ ...f, price: f.ticket_type === 'free' ? 0 : (f.price || 0), quantity: f.quantity || 0, people_per_ticket: f.people_per_ticket || 1 })
+  const validate = () => { const e: any = {}; if (!f.name.trim()) e.name = 'Required'; if (f.ticket_type === 'paid' && Number(f.price) < 1) e.price = 'Minimum price is ₹1'; if (!f.people_per_ticket || Number(f.people_per_ticket) < 1) e.people_per_ticket = 'Required'; if (!f.quantity || Number(f.quantity) < 1) e.quantity = 'Required'; setErrors(e); return Object.keys(e).length === 0 }
+  const handleSave = () => { if (!validate()) return; onSave({ ...f, price: f.ticket_type === 'free' ? 0 : (f.price || 0), quantity: f.quantity || 0, people_per_ticket: f.people_per_ticket || 1 }) }
   const addGoodie = (val: string) => { if (GOODIE_SUGGESTIONS.includes(val) && !f.goodies.includes(val)) set('goodies', [...f.goodies, val]); setGoodieInput('') }
   const removeGoodie = (i: number) => set('goodies', f.goodies.filter((_: string, idx: number) => idx !== i))
   const matches = GOODIE_SUGGESTIONS.filter(g => !f.goodies.includes(g) && g.toLowerCase().includes(goodieInput.trim().toLowerCase()))
@@ -45,10 +46,10 @@ export default function OREV1114BTicketCategoryForm({ ticket, locked, onSave, on
           <TypeBtn val="free" label="Free" active={f.ticket_type === 'free'} locked={locked} onClick={() => set('ticket_type', 'free')} theme={theme} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Ticket name" span2 theme={theme}><input placeholder="e.g. VIP" disabled={locked} value={f.name} onChange={e => set('name', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} /></Field>
-          {f.ticket_type === 'paid' && <Field label="Price" theme={theme}><input placeholder="₹0" type="number" disabled={locked} value={f.price} onChange={e => set('price', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} /></Field>}
-          <Field label="People per ticket" theme={theme}><input placeholder="1" type="number" disabled={locked} value={f.people_per_ticket} onChange={e => set('people_per_ticket', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} /></Field>
-          <Field label="Quantity for sale" span2 theme={theme}><input placeholder="100" type="number" disabled={locked} value={f.quantity} onChange={e => set('quantity', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} /></Field>
+          <Field label="Ticket name" span2 theme={theme}><input placeholder="e.g. VIP" disabled={locked} value={f.name} onChange={e => set('name', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} />{errors.name && <span className="text-[10px] text-red-500 block mt-0.5">{errors.name}</span>}</Field>
+          {f.ticket_type === 'paid' && <Field label="Price" theme={theme}><input placeholder="₹0" type="number" min="1" disabled={locked} value={f.price} onChange={e => set('price', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} />{errors.price && <span className="text-[10px] text-red-500 block mt-0.5">{errors.price}</span>}</Field>}
+          <Field label="People per ticket" theme={theme}><input placeholder="1" type="number" disabled={locked} value={f.people_per_ticket} onChange={e => set('people_per_ticket', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} />{errors.people_per_ticket && <span className="text-[10px] text-red-500 block mt-0.5">{errors.people_per_ticket}</span>}</Field>
+          <Field label="Quantity for sale" span2 theme={theme}><input placeholder="100" type="number" disabled={locked} value={f.quantity} onChange={e => set('quantity', e.target.value)} className="h-10 px-3 text-sm focus:outline-none w-full" style={inputStyle} />{errors.quantity && <span className="text-[10px] text-red-500 block mt-0.5">{errors.quantity}</span>}</Field>
           <Field label="Description" span2 theme={theme}><textarea placeholder="What's included with this ticket" disabled={locked} value={f.description} onChange={e => set('description', e.target.value)} className="px-3 py-2 text-sm focus:outline-none w-full h-16" style={inputStyle} /></Field>
         </div>
         <label className="text-xs font-medium block mt-4 mb-1" style={labelStyle}>Goodies (optional)</label>

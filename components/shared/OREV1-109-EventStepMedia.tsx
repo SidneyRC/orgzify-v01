@@ -81,6 +81,7 @@ export default function OREV1109EventStepMedia({ event, locked, onSaved, onBack,
     if (!banners.some(b => b.is_default_banner)) { setBannerError('Please set one banner as Default.'); return }
     toast.success(event?.status === 'active' ? 'Changes sent for re-verification' : 'Saved'); onSaved(event as EventDraft)
   }
+  const handleAdminNext = () => onSaved(event as EventDraft)
   const cropAspect = cropTarget?.section === 'gallery' ? (cropTarget.orientation === 'vertical' ? 1 / 1.5 : 2) : 2
   const cropLabel = cropTarget?.section === 'gallery' ? `Adjust gallery photo crop (${cropTarget.orientation === 'vertical' ? '1:1.5' : '2:1'} ratio, auto-detected)` : 'Adjust banner crop (2:1 ratio)'
   return (
@@ -96,7 +97,7 @@ export default function OREV1109EventStepMedia({ event, locked, onSaved, onBack,
         <OREV1109FGallerySection gallery={gallery} theme={theme} radius={radius} onDragEnd={handleDragEnd} onDelete={handleDelete} onCaptionChange={handleCaptionChange} onFileSelect={handleGalleryFileSelect} />
         {event?.id && <OREV1109CSponsorsSocialLinks eventId={event.id} locked={locked} theme={theme} />}
       </fieldset>
-      <OREV1109GMediaStepFooter locked={locked} onBack={onBack} onClose={onClose} onContinue={handleContinue} theme={theme} />
+      <OREV1109GMediaStepFooter locked={locked} onBack={onBack} onClose={onClose} onContinue={locked ? handleAdminNext : handleContinue} theme={theme} />
     </div>
   )
 }

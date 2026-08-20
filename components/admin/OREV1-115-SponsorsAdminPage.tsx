@@ -61,6 +61,13 @@ export default function OREV1115SponsorsAdminPage({ backLink = '/admin/ecosystem
     if (!res.ok) { toast.error('Failed'); return }
     setRows(rows => rows.map(x => x.id === r.id ? { ...x, is_enabled: !x.is_enabled } : x))
   }
+  const handleDelete = async (r: SponsorRow) => {
+    if (!confirm(`Permanently delete "${r.name}"? This cannot be undone.`)) return
+    const res = await fetch(`${API}?id=${r.id}`, { method: 'DELETE' })
+    const json = await res.json()
+    if (!res.ok) { toast.error(json.error || 'Failed'); return }
+    toast.success('Sponsor deleted'); setRows(rows => rows.filter(x => x.id !== r.id)); setTotal(t => t - 1)
+  }
   const handleDownload = () => {
     const header = 'Name,Status,Enabled,Created\n'
     const csv = rows.map(r => `"${r.name}",${r.status},${r.is_enabled ? 'Yes' : 'No'},${new Date(r.created_at).toLocaleDateString()}`).join('\n')
@@ -72,8 +79,8 @@ export default function OREV1115SponsorsAdminPage({ backLink = '/admin/ecosystem
   return (
     <div className="p-4 md:p-6" style={{ backgroundColor: theme?.page_bg || '#f9fafb', minHeight: '100vh' }}>
       <OREV1118SponsorsToolbar theme={theme} statusFilter={statusFilter} setStatusFilter={v => { setStatusFilter(v); setPage(1) }} searchInput={searchInput} setSearchInput={setSearchInput} page={page} setPage={setPage} limit={limit} setLimit={v => { setLimit(v); setPage(1) }} total={total} totalPages={totalPages} STATUS_LABELS={STATUS_LABELS} onSearch={handleSearch} onReset={handleReset} onDownload={handleDownload} onAdd={() => setShowAddModal(true)} onBack={() => router.push(backLink)} />
-      <OREV1115BSponsorsTable rows={rows} loading={loading} theme={theme} STATUS_LABELS={STATUS_LABELS} STATUS_COLORS={STATUS_COLORS} onApprove={handleApprove} onReject={setReasonTarget} onEdit={setEditTarget} onToggleEnabled={handleToggleEnabled} />
-      <OREV1115CSponsorsMobileCards rows={rows} loading={loading} theme={theme} STATUS_LABELS={STATUS_LABELS} STATUS_COLORS={STATUS_COLORS} onApprove={handleApprove} onReject={setReasonTarget} onEdit={setEditTarget} onToggleEnabled={handleToggleEnabled} />
+      <OREV1115BSponsorsTable rows={rows} loading={loading} theme={theme} STATUS_LABELS={STATUS_LABELS} STATUS_COLORS={STATUS_COLORS} onApprove={handleApprove} onReject={setReasonTarget} onEdit={setEditTarget} onToggleEnabled={handleToggleEnabled} onDelete={handleDelete} />
+      <OREV1115CSponsorsMobileCards rows={rows} loading={loading} theme={theme} STATUS_LABELS={STATUS_LABELS} STATUS_COLORS={STATUS_COLORS} onApprove={handleApprove} onReject={setReasonTarget} onEdit={setEditTarget} onToggleEnabled={handleToggleEnabled} onDelete={handleDelete} />
       {reasonTarget && <RejectReasonModal entityName={reasonTarget.name} statusCode="rejected" apiBase={API} onCancel={() => setReasonTarget(null)} onConfirm={handleReject} />}
       {showAddModal && <OREV1117AdminAddSponsorModal theme={theme} onClose={() => setShowAddModal(false)} onCreated={() => { setShowAddModal(false); fetchData() }} />}
       {editTarget && <OREV1117AdminAddSponsorModal theme={theme} sponsor={editTarget} onClose={() => setEditTarget(null)} onCreated={() => { setEditTarget(null); fetchData() }} />}

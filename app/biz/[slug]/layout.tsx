@@ -1,7 +1,7 @@
 // THIS FILE GOES IN: app/biz/[slug]/layout.tsx (REPLACES the version built earlier this session)
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams, usePathname } from 'next/navigation'
+import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import AdminShell from '@/components/admin/OREV1-042-AdminShell'
 
 type ModuleAccess = { pages: boolean; academy: boolean; events: boolean }
@@ -9,13 +9,15 @@ type ModuleAccess = { pages: boolean; academy: boolean; events: boolean }
 export default function EntityShellLayout({ children }: { children: React.ReactNode }) {
   const { slug } = useParams<{ slug: string }>()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const mode = searchParams.get('mode') || ''
   const [ready, setReady] = useState(false)
   const [entityName, setEntityName] = useState('')
   const [entityId, setEntityId] = useState('')
   const [moduleAccess, setModuleAccess] = useState<ModuleAccess>({ pages: false, academy: false, events: false })
 
   useEffect(() => {
-    fetch('/entity/access').then(r => r.json()).then(json => {
+    fetch(`/entity/access?slug=${slug}&mode=${mode}`).then(r => r.json()).then(json => {
       if (json.allowed && json.status === 'active') {
         setEntityName(json.entity_name)
         setEntityId(json.entity_id)

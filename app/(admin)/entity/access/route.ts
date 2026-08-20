@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getActiveEntityContext } from '@/lib/activeCompanyContext'
+import { getActiveEntityContext, getActiveCompanyId } from '@/lib/activeCompanyContext'
+import { getFullCompanyRights } from '@/lib/getCompanyRights'
 
 // Checks if the Reporting Office's active plan grants access to a given module.
 async function checkModuleAccess(reportingCompanyId: string | null, moduleName: string): Promise<boolean> {
@@ -38,12 +39,34 @@ export async function GET(req: NextRequest) {
   const { session, entityId } = await getActiveEntityContext(cookieStore)
 
   if (!session) return NextResponse.json({ allowed: false, reason: 'no_session' })
-  if (!entityId) return NextResponse.json({ allowed: false, reason: 'not_found' }, { status: 404 })
+
+  let resolvedEntityId = entityId
+  if (!resolvedEntityId) {
+    const slugParam = req.nextUrl.searchParams.get('slug')
+    const modeParam = req.nextUrl.searchParams.get('mode')
+    if (slugParam) {
+      const { data: userRow } = await supabaseAdmin.from('users').select('is_super_admin').eq('id', session.user_id).maybeSingle()
+      let hasAdminAccess = userRow?.is_super_admin === true
+      if (!hasAdminAccess) {
+        const activeCompanyId = await getActiveCompanyId(cookieStore)
+        if (activeCompanyId) {
+          const rights = await getFullCompanyRights(session.user_id, activeCompanyId)
+          const neededRight = modeParam === 'edit_admin' ? 'can_edit' : 'can_view'
+          hasAdminAccess = !!rights['events']?.[neededRight as keyof typeof rights['events']]
+        }
+      }
+      if (hasAdminAccess) {
+        const { data: bySlug } = await supabaseAdmin.from('entities').select('id').eq('slug', slugParam).maybeSingle()
+        if (bySlug) resolvedEntityId = bySlug.id
+      }
+    }
+  }
+  if (!resolvedEntityId) return NextResponse.json({ allowed: false, reason: 'not_found' }, { status: 404 })
 
   const { data: entity } = await supabaseAdmin
     .from('entities')
     .select('id, display_name, status, user_id, reporting_company_id, process_id')
-    .eq('id', entityId)
+    .eq('id', resolvedEntityId)
     .maybeSingle()
   if (!entity) return NextResponse.json({ allowed: false, reason: 'not_found' }, { status: 404 })
 

@@ -68,7 +68,9 @@ export default function OREV1112EventStepSchedule({ eventId, eventFormat, durati
       <div className="flex justify-end gap-2">
         <button onClick={onBack} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">← Back</button>
         <button onClick={onClose} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">✕ Close</button>
-        {!locked && <button onClick={handleContinue} disabled={checking} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition disabled:opacity-50">{checking ? 'Checking…' : 'Continue'}</button>}
+        {!locked
+          ? <button onClick={handleContinue} disabled={checking} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition disabled:opacity-50">{checking ? 'Checking…' : 'Continue'}</button>
+          : <button onClick={onContinue} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">Next →</button>}
       </div>
     </div>
   )

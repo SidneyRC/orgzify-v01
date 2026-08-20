@@ -1,7 +1,7 @@
 // THIS FILE GOES IN: components/shared/OREV1-100-EventRegistration.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useTheme } from '@/lib/ThemeContext'
 import OREV1100BEventStepperHeader from '@/components/shared/OREV1-100B-EventStepperHeader'
 import OREV1106EventStepType from '@/components/shared/OREV1-106-EventStepType'
@@ -12,6 +12,7 @@ import OREV1111EventStepVenue from '@/components/shared/OREV1-111-EventStepVenue
 import OREV1112EventStepSchedule from '@/components/shared/OREV1-112-EventStepSchedule'
 import OREV1113EventStepBookingMethod from '@/components/shared/OREV1-113-EventStepBookingMethod'
 import OREV1114EventStepTicketCategories from '@/components/shared/OREV1-114-EventStepTicketCategories'
+import OREV1115EventStepReview from '@/components/shared/OREV1-115-EventStepReview'
 
 export type EventDraft = {
   id: string; process_id: string; name: string; slug: string; status: string; under_review?: boolean
@@ -24,9 +25,11 @@ export type EventDraft = {
 
 const STEP_LABELS_PHYSICAL = ['Event Type', 'Event Info', 'Additional Info', 'Media', 'Venue', 'Schedule', 'Booking Method', 'Tickets', 'Review']
 const STEP_LABELS_VIRTUAL = ['Event Type', 'Event Info', 'Additional Info', 'Media', 'Schedule', 'Booking Method', 'Tickets', 'Review']
+const ADMIN_LIST_URL = '/admin/ecosystem/events'
 
-export default function OREV1100EventRegistration({ entityId, entitySlug }: { entityId: string; entitySlug: string }) {
+export default function OREV1100EventRegistration({ entityId, entitySlug, adminMode }: { entityId: string; entitySlug: string; adminMode?: 'view' | 'edit' }) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const { theme } = useTheme()
   const [event, setEvent] = useState<EventDraft | null>(null)
   const [loading, setLoading] = useState(true)
@@ -68,30 +71,35 @@ export default function OREV1100EventRegistration({ entityId, entitySlug }: { en
           reached = bookingStepNum
           const tkRes = await fetch(`/biz/events/eventvenue/tickets/api?event_id=${ev.id}`)
           const tkJson = await tkRes.json()
-          if ((tkJson.tickets || []).length > 0) reached = ticketStepNum
+          if ((tkJson.tickets || []).length > 0) {
+            reached = ticketStepNum
+            if (ev.status === 'pending' || ev.status === 'active') reached = ticketStepNum + 1
+          }
         }
       }
 
-      setMaxReachedStep(reached)
-      setCurrentStep(reached)
+      setMaxReachedStep(adminMode ? ticketStepNum + 1 : reached)
+      setCurrentStep(adminMode ? 1 : reached)
       setLoading(false)
     }
     init()
   }, [searchParams])
 
-  const isLocked = event?.status === 'pending'
+  const isLocked = adminMode === 'view' || (event?.status === 'pending' && adminMode !== 'edit')
   const isPhysical = eventFormat !== 'virtual'
   const steps = isPhysical ? STEP_LABELS_PHYSICAL : STEP_LABELS_VIRTUAL
   const scheduleStep = isPhysical ? 6 : 5
   const bookingStep = scheduleStep + 1
   const ticketStep = bookingStep + 1
+  const reviewStep = ticketStep + 1
+  const stepNumbers = { info: 2, additional: 3, media: 4, schedule: scheduleStep, booking: bookingStep }
 
   const goTo = (step: number, reached?: number) => {
     setCurrentStep(step)
     if (reached && reached > maxReachedStep) setMaxReachedStep(reached)
   }
 
-  const handleClose = () => { window.location.href = closeUrl }
+  const handleClose = () => { router.push(adminMode ? ADMIN_LIST_URL : closeUrl) }
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: theme?.page_bg || '#f9fafb' }}>
@@ -103,8 +111,8 @@ export default function OREV1100EventRegistration({ entityId, entitySlug }: { en
     <div className="px-4 md:px-10 py-6 md:py-8 w-full" style={{ backgroundColor: theme?.page_bg || '#f9fafb', minHeight: '100vh' }}>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ color: theme?.color_text_primary || '#111827' }}>Event Builder</h1>
-          <p className="text-xs mt-0.5" style={{ color: theme?.color_text_muted || '#9ca3af' }}>Complete each step — your progress is saved as you go</p>
+          <h1 className="text-2xl font-semibold" style={{ color: theme?.color_text_primary || '#111827' }}>{adminMode === 'view' ? 'Viewing Event (Read-only)' : 'Event Builder'}</h1>
+          <p className="text-xs mt-0.5" style={{ color: theme?.color_text_muted || '#9ca3af' }}>{adminMode ? 'Admin mode — browse using Back/Next on each step' : 'Complete each step — your progress is saved as you go'}</p>
         </div>
         {event && <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-600 font-medium">{event.process_id}</span>}
       </div>
@@ -141,7 +149,12 @@ export default function OREV1100EventRegistration({ entityId, entitySlug }: { en
         )}
         {currentStep === ticketStep && event && (
           <OREV1114EventStepTicketCategories eventId={event.id} locked={isLocked} durationMinutes={event.event_duration_minutes || 0}
-            onContinue={() => goTo(ticketStep + 1, ticketStep + 1)} onBack={() => goTo(bookingStep)} onClose={handleClose} />
+            onContinue={() => goTo(reviewStep, reviewStep)} onBack={() => goTo(bookingStep)} onClose={handleClose} />
+        )}
+        {currentStep === reviewStep && event && (
+          <OREV1115EventStepReview event={event} locked={isLocked} steps={stepNumbers} theme={theme}
+            onEditStep={s => goTo(s)} onBack={() => goTo(ticketStep)} onClose={handleClose}
+            onSubmitted={() => setEvent(prev => prev ? { ...prev, status: 'pending' } : prev)} />
         )}
       </div>
     </div>

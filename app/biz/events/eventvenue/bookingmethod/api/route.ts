@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
 
   if (timeUrls?.length > 0) {
     for (const t of timeUrls) {
-      await supabaseAdmin.from('event_venue_time_urls').upsert({ event_venue_time_id: t.event_venue_time_id, booking_url: t.booking_url }, { onConflict: 'event_venue_time_id' })
+      const { error: urlError } = await supabaseAdmin.from('event_venue_time_urls').upsert({ event_venue_time_id: t.event_venue_time_id, booking_url: t.booking_url }, { onConflict: 'event_venue_time_id' })
+      if (urlError) return NextResponse.json({ error: `Failed to save URL for one slot: ${urlError.message}` }, { status: 500 })
     }
   }
   return NextResponse.json({ data: saved })

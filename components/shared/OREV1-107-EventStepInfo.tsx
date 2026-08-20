@@ -1,4 +1,4 @@
-// THIS FILE GOES IN: components/shared/OREV1-107-EventStepInfo.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-107-EventStepInfo.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
@@ -42,6 +42,7 @@ export default function OREV1107EventStepInfo({ event, entityId, eventFormat, lo
     if (!name.trim()) e.name = 'Required'
     else if (name.length > 50) e.name = 'Max 50 characters'
     if (!categoryId) e.category = 'Required'
+    if (languages.length === 0) e.languages = 'Select at least one language'
     setErrors(e); return Object.keys(e).length === 0
   }
 
@@ -96,8 +97,9 @@ export default function OREV1107EventStepInfo({ event, entityId, eventFormat, lo
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500">Language(s)</label>
+          <label className="text-xs text-gray-500">Language(s) <span className="text-red-500">*</span></label>
           <OREV1107BLanguagePicker value={languages} onChange={setLanguages} inputStyle={inputStyle} />
+          {errors.languages && <span className="text-xs text-red-500">{errors.languages}</span>}
         </div>
 
         <div className="flex flex-col gap-1">
@@ -116,7 +118,9 @@ export default function OREV1107EventStepInfo({ event, entityId, eventFormat, lo
       <div className="flex justify-end gap-2">
         <button onClick={onBack} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">← Back</button>
         <button onClick={onClose} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">✕ Close</button>
-        {!locked && <button onClick={handleSave} disabled={saving} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition disabled:opacity-50">{saving ? 'Saving…' : 'Continue'}</button>}
+        {!locked
+          ? <button onClick={handleSave} disabled={saving} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition disabled:opacity-50">{saving ? 'Saving…' : 'Continue'}</button>
+          : <button onClick={() => onSaved(event as EventDraft)} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">Next →</button>}
       </div>
     </div>
   )

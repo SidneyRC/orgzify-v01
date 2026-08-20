@@ -1,4 +1,4 @@
-// THIS FILE GOES IN: components/shared/OREV1-109G-MediaStepFooter.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-109G-MediaStepFooter.tsx (REPLACES existing file)
 'use client'
 
 type Props = { locked: boolean; onBack: () => void; onClose: () => void; onContinue: () => void; theme: any }
@@ -12,7 +12,7 @@ export default function OREV1109GMediaStepFooter({ locked, onBack, onClose, onCo
     <div className="flex justify-end gap-2">
       <button onClick={onBack} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">← Back</button>
       <button onClick={onClose} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">✕ Close</button>
-      {!locked && <button onClick={onContinue} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">Continue</button>}
+      <button onClick={onContinue} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">{locked ? 'Next →' : 'Continue'}</button>
     </div>
   )
 }

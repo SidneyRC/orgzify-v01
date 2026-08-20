@@ -2,11 +2,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 type SponsorRow = { id: string; name: string; logo_url: string | null; status: string; is_enabled: boolean; created_at: string }
-type Props = { rows: SponsorRow[]; loading: boolean; theme: any; STATUS_LABELS: Record<string, string>; STATUS_COLORS: Record<string, string>; onApprove: (r: SponsorRow) => void; onReject: (r: SponsorRow) => void; onEdit: (r: SponsorRow) => void; onToggleEnabled: (r: SponsorRow) => void }
+type Props = { rows: SponsorRow[]; loading: boolean; theme: any; STATUS_LABELS: Record<string, string>; STATUS_COLORS: Record<string, string>; onApprove: (r: SponsorRow) => void; onReject: (r: SponsorRow) => void; onEdit: (r: SponsorRow) => void; onToggleEnabled: (r: SponsorRow) => void; onDelete: (r: SponsorRow) => void }
 
 const IconAccept = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
 const IconReject = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+const IconDelete = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
 
 function EnableToggle({ r, onToggle, theme }: { r: SponsorRow; onToggle: (r: SponsorRow) => void; theme: any }) {
   if (r.status !== 'approved') return null
@@ -17,7 +18,7 @@ function EnableToggle({ r, onToggle, theme }: { r: SponsorRow; onToggle: (r: Spo
   )
 }
 
-export default function OREV1115CSponsorsMobileCards({ rows, loading, theme, STATUS_LABELS, STATUS_COLORS, onApprove, onReject, onEdit, onToggleEnabled }: Props) {
+export default function OREV1115CSponsorsMobileCards({ rows, loading, theme, STATUS_LABELS, STATUS_COLORS, onApprove, onReject, onEdit, onToggleEnabled, onDelete }: Props) {
   const [zoomedUrl, setZoomedUrl] = useState<string | null>(null)
   useEffect(() => {
     if (!zoomedUrl) return
@@ -48,6 +49,7 @@ export default function OREV1115CSponsorsMobileCards({ rows, loading, theme, STA
                   <button onClick={() => onReject(r)} title="Reject" className="text-red-500 hover:text-red-700 transition p-1 rounded-lg hover:bg-red-50"><IconReject /></button>
                 </>
               )}
+              {r.status !== 'approved' && <button onClick={() => onDelete(r)} title="Delete" className="text-gray-400 hover:text-red-600 transition p-1 rounded-lg hover:bg-red-50"><IconDelete /></button>}
             </div>
           </div>
         </div>

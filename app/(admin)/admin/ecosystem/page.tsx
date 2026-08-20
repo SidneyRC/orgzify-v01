@@ -1,8 +1,11 @@
+// THIS FILE GOES IN: app/(admin)/admin/ecosystem/page.tsx (REPLACES existing file)
 import { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getServerSession } from "@/lib/auth";
 import { getDownlineIds } from "@/lib/companyScope";
+import { getActiveCompanyId } from "@/lib/activeCompanyContext";
 import { getTicketSummary } from "@/lib/getTicketSummary";
 
 export const metadata: Metadata = {
@@ -17,23 +20,31 @@ async function getTheme() {
   return data;
 }
 
+// Resolves what a non-Super-Admin can see, based on their CURRENT ACTIVE
+// company (same cookie the rights system already uses), not a raw single
+// role lookup. Switching active company switches what they see here too.
+// Returns null for Super Admin (no restriction).
+async function getScopedEntityIds(session: any): Promise<string[] | null> {
+  if (!session) return [];
+  if (session.is_super_admin) return null;
+  const cookieStore = await cookies();
+  const activeCompanyId = await getActiveCompanyId(cookieStore);
+  if (!activeCompanyId) return [];
+  const companyIds = await getDownlineIds(activeCompanyId);
+  const { data: userRows } = await supabaseAdmin.from("user_roles").select("user_id").in("company_id", companyIds).eq("is_active", true);
+  const userIds = [...new Set((userRows || []).map((r: any) => r.user_id))];
+  if (userIds.length === 0) return [];
+  const { data: entRows } = await supabaseAdmin.from("entities").select("id").in("user_id", userIds);
+  return (entRows || []).map((e: any) => e.id);
+}
+
 async function getActiveEntityCount(): Promise<number> {
   const session = await getServerSession();
-  if (!session) return 0;
-  let companyIds: string[] | null = null;
-  if (!session.is_super_admin) {
-    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("company_id").eq("user_id", session.user_id).eq("is_active", true).maybeSingle();
-    if (!roleRow?.company_id) return 0;
-    companyIds = await getDownlineIds(roleRow.company_id);
-  }
-  if (companyIds) {
-    const { data: userRows } = await supabaseAdmin.from("user_roles").select("user_id").in("company_id", companyIds).eq("is_active", true);
-    const userIds = [...new Set((userRows || []).map((r: any) => r.user_id))];
-    if (userIds.length === 0) return 0;
-    const { count } = await supabaseAdmin.from("entities").select("*", { count: "exact", head: true }).eq("status", "active").in("user_id", userIds);
-    return count ?? 0;
-  }
-  const { count } = await supabaseAdmin.from("entities").select("*", { count: "exact", head: true }).eq("status", "active");
+  const entityIds = await getScopedEntityIds(session);
+  if (entityIds && entityIds.length === 0) return 0;
+  let q = supabaseAdmin.from("entities").select("*", { count: "exact", head: true }).eq("status", "active");
+  if (entityIds) q = q.in("id", entityIds);
+  const { count } = await q;
   return count ?? 0;
 }
 
@@ -45,10 +56,23 @@ async function getHelpDeskSummary(): Promise<{ total: number; open: number }> {
   return { total: total ?? 0, open: open ?? 0 };
 }
 
+// Events totals — same active-company scoping as getActiveEntityCount.
+async function getEventsSummary(): Promise<{ total: number; pending: number }> {
+  const session = await getServerSession();
+  const entityIds = await getScopedEntityIds(session);
+  if (entityIds && entityIds.length === 0) return { total: 0, pending: 0 };
+  let totalQuery = supabaseAdmin.from("events").select("*", { count: "exact", head: true }).neq("status", "deleted");
+  let pendingQuery = supabaseAdmin.from("events").select("*", { count: "exact", head: true }).eq("status", "pending");
+  if (entityIds) { totalQuery = totalQuery.in("entity_id", entityIds); pendingQuery = pendingQuery.in("entity_id", entityIds); }
+  const { count: total } = await totalQuery;
+  const { count: pending } = await pendingQuery;
+  return { total: total ?? 0, pending: pending ?? 0 };
+}
+
 export default async function AdminEcosystemPage() {
   const session = await getServerSession();
-  const [theme, entityCount, ticketSummary, helpDeskSummary] = await Promise.all([
-    getTheme(), getActiveEntityCount(), getTicketSummary(session), getHelpDeskSummary()
+  const [theme, entityCount, ticketSummary, helpDeskSummary, eventsSummary] = await Promise.all([
+    getTheme(), getActiveEntityCount(), getTicketSummary(session), getHelpDeskSummary(), getEventsSummary()
   ]);
   const radius = theme?.global_border_radius || "12px";
   const textPrimary = theme?.color_text_primary || "#111827";
@@ -72,6 +96,12 @@ export default async function AdminEcosystemPage() {
       href: "/admin/ecosystem/helpdesk", meta: `Total : ${helpDeskSummary.total}  |  Open : ${helpDeskSummary.open}`,
       badge: helpDeskSummary.open > 0 ? "Open Tickets" : "All Clear",
       badgeColor: helpDeskSummary.open > 0 ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700", icon: "🛎️",
+    },
+    {
+      title: "Events", description: "Events submitted by organisers for review",
+      href: "/admin/ecosystem/events", meta: `Total : ${eventsSummary.total}  |  Pending : ${eventsSummary.pending}`,
+      badge: eventsSummary.pending > 0 ? "Pending Review" : "All Clear",
+      badgeColor: eventsSummary.pending > 0 ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700", icon: "🎟️",
     },
   ];
 

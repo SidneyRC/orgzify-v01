@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSession } from '@/lib/auth'
 import { getActiveCompanyId } from '@/lib/activeCompanyContext'
 import { getFullCompanyRights } from '@/lib/getCompanyRights'
+import { getDownlineIds } from '@/lib/companyScope'
 
 async function hasEventRight(req: NextRequest, session: any, right: string) {
   if (session.is_super_admin) return true
@@ -34,6 +35,86 @@ async function generateSlug(name: string, excludeId?: string) {
   }
 }
 
+// Resolves what a non-Super-Admin can see, based on their CURRENT ACTIVE
+// company (from the same cookie the app's rights system already uses) —
+// not a raw lookup of "any role they hold". Switching active company
+// switches what they see, consistent with the rest of the app.
+// entityIds/companyIds = null means Super Admin (no restriction).
+async function getScopedContext(req: NextRequest, session: any): Promise<{ entityIds: string[] | null; companyIds: string[] | null }> {
+  if (session.is_super_admin) return { entityIds: null, companyIds: null }
+  const activeCompanyId = await getActiveCompanyId(req.cookies)
+  if (!activeCompanyId) return { entityIds: [], companyIds: [] }
+  const companyIds = await getDownlineIds(activeCompanyId)
+  const { data: userRows } = await supabaseAdmin.from('user_roles').select('user_id').in('company_id', companyIds).eq('is_active', true)
+  const userIds = [...new Set((userRows || []).map((r: any) => r.user_id))]
+  if (!userIds.length) return { entityIds: [], companyIds }
+  const { data: entRows } = await supabaseAdmin.from('entities').select('id').in('user_id', userIds)
+  return { entityIds: (entRows || []).map((e: any) => e.id), companyIds }
+}
+
+// Resolves entity IDs matching Country/State/City/Reporting Office/Entity Name
+// filters. Returns null if no such filter was given (no restriction).
+async function getFilteredEntityIds(sp: URLSearchParams): Promise<string[] | null> {
+  const entityName = sp.get('entity_name') || ''
+  const reportingOffice = sp.get('reporting_office') || ''
+  const country = sp.get('country') || ''
+  const state = sp.get('state') || ''
+  const city = sp.get('city') || ''
+  if (!entityName && !reportingOffice && !country && !state && !city) return null
+
+  let entQuery = supabaseAdmin.from('entities').select('id')
+  if (entityName) entQuery = entQuery.ilike('display_name', `%${entityName}%`)
+  if (reportingOffice) {
+    const { data: companies } = await supabaseAdmin.from('companies').select('id').ilike('display_name', `%${reportingOffice}%`)
+    const compIds = (companies || []).map((c: any) => c.id)
+    if (!compIds.length) return []
+    entQuery = entQuery.in('reporting_company_id', compIds)
+  }
+  const { data: entRows } = await entQuery
+  let ids = (entRows || []).map((e: any) => e.id)
+  if (!ids.length) return []
+
+  if (country || state || city) {
+    const findLocIds = async (name: string, level: string) => {
+      const { data } = await supabaseAdmin.from('locations').select('id').ilike('name', `%${name}%`).eq('level', level)
+      return (data || []).map((l: any) => l.id)
+    }
+    let addrQuery = supabaseAdmin.from('entity_addresses').select('entity_id').eq('address_type', 'registered').in('entity_id', ids)
+    if (city) { const c = await findLocIds(city, 'city'); if (!c.length) return []; addrQuery = addrQuery.in('city', c) }
+    if (state) { const s = await findLocIds(state, 'state'); if (!s.length) return []; addrQuery = addrQuery.in('state', s) }
+    if (country) {
+      const { data: countries } = await supabaseAdmin.from('country_master').select('id').ilike('name', `%${country}%`)
+      const cIds = (countries || []).map((c: any) => c.id)
+      if (!cIds.length) return []
+      addrQuery = addrQuery.in('country_id', cIds)
+    }
+    const { data: addrRows } = await addrQuery
+    ids = (addrRows || []).map((a: any) => a.entity_id)
+  }
+  return ids
+}
+
+// Resolves event IDs whose scheduled date falls within the given range.
+async function getScheduledEventIds(sp: URLSearchParams): Promise<string[] | null> {
+  const from = sp.get('scheduled_from') || ''
+  const to = sp.get('scheduled_to') || ''
+  if (!from && !to) return null
+  let q = supabaseAdmin.from('event_venue_dates').select('event_date, event_venues(event_id)')
+  if (from) q = q.gte('event_date', from)
+  if (to) q = q.lte('event_date', to)
+  const { data } = await q
+  return [...new Set((data || []).map((d: any) => d.event_venues?.event_id).filter(Boolean))]
+}
+
+// Returns the location/country IDs actually used (via registered address) by
+// the given entity IDs, for one column. entityIds=null means no restriction.
+async function getScopedAddressValues(entityIds: string[] | null, column: 'city' | 'state' | 'country_id') {
+  if (entityIds === null) return null
+  if (!entityIds.length) return []
+  const { data } = await supabaseAdmin.from('entity_addresses').select(column).eq('address_type', 'registered').in('entity_id', entityIds)
+  return [...new Set((data || []).map((a: any) => a[column]).filter(Boolean))]
+}
+
 export async function GET(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -54,6 +135,67 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: data || [] })
   }
 
+  if (sp.get('type') === 'tag_settings') {
+    const { data } = await supabaseAdmin.from('platform_settings').select('value').eq('key', 'max_event_tags').maybeSingle()
+    return NextResponse.json({ max: data ? parseInt(data.value) : 3 })
+  }
+
+  if (sp.get('type') === 'tags_search') {
+    const q = sp.get('q') || ''
+    let q2 = supabaseAdmin.from('event_tags_format').select('id, name').eq('status', 'active').order('display_order')
+    if (q) q2 = q2.ilike('name', `%${q}%`)
+    const { data } = await q2.limit(8)
+    return NextResponse.json({ data: data || [] })
+  }
+
+  if (sp.get('type') === 'event_tags') {
+    const eventId = sp.get('event_id') || ''
+    if (!eventId) return NextResponse.json({ data: [] })
+    const { data } = await supabaseAdmin.from('event_tag_assignments')
+      .select('tag_id, event_tags_format(id, name)').eq('event_id', eventId)
+    const tags = (data || []).map((r: any) => Array.isArray(r.event_tags_format) ? r.event_tags_format[0] : r.event_tags_format).filter(Boolean)
+    return NextResponse.json({ data: tags })
+  }
+
+  if (sp.get('type') === 'filter_suggestions') {
+    const field = sp.get('field') || ''
+    const q = sp.get('q') || ''
+    if (!q || q.length < 2) return NextResponse.json({ data: [] })
+    const { entityIds, companyIds } = await getScopedContext(req, session)
+
+    if (field === 'country') {
+      const locIds = await getScopedAddressValues(entityIds, 'country_id')
+      if (locIds && !locIds.length) return NextResponse.json({ data: [] })
+      let q2 = supabaseAdmin.from('country_master').select('name').ilike('name', `%${q}%`).order('name').limit(8)
+      if (locIds) q2 = q2.in('id', locIds)
+      const { data } = await q2
+      return NextResponse.json({ data: [...new Set((data || []).map((c: any) => c.name))] })
+    }
+    if (field === 'state' || field === 'city') {
+      const locIds = await getScopedAddressValues(entityIds, field)
+      if (locIds && !locIds.length) return NextResponse.json({ data: [] })
+      let q2 = supabaseAdmin.from('locations').select('name').eq('level', field).ilike('name', `%${q}%`).order('name').limit(8)
+      if (locIds) q2 = q2.in('id', locIds)
+      const { data } = await q2
+      return NextResponse.json({ data: [...new Set((data || []).map((l: any) => l.name))] })
+    }
+    if (field === 'reporting_office') {
+      if (companyIds && !companyIds.length) return NextResponse.json({ data: [] })
+      let q2 = supabaseAdmin.from('companies').select('display_name').ilike('display_name', `%${q}%`).order('display_name').limit(8)
+      if (companyIds) q2 = q2.in('id', companyIds)
+      const { data } = await q2
+      return NextResponse.json({ data: (data || []).map((c: any) => c.display_name) })
+    }
+    if (field === 'entity_name') {
+      if (entityIds && !entityIds.length) return NextResponse.json({ data: [] })
+      let q2 = supabaseAdmin.from('entities').select('display_name').ilike('display_name', `%${q}%`).order('display_name').limit(8)
+      if (entityIds) q2 = q2.in('id', entityIds)
+      const { data } = await q2
+      return NextResponse.json({ data: (data || []).map((e: any) => e.display_name) })
+    }
+    return NextResponse.json({ data: [] })
+  }
+
   const ref = sp.get('process_id')
   if (ref) {
     const { data, error } = await supabaseAdmin.from('events').select('*').eq('process_id', ref).maybeSingle()
@@ -67,24 +209,68 @@ export async function GET(req: NextRequest) {
     const offset = (page - 1) * limit
     const search = sp.get('search') || ''
     const status = sp.get('status') || ''
+    const statusList = status ? status.split(',').filter(Boolean) : []
+    const createdFrom = sp.get('created_from') || ''
+    const createdTo = sp.get('created_to') || ''
+
+    const { entityIds: scopedIds } = await getScopedContext(req, session)
+    if (scopedIds && scopedIds.length === 0) return NextResponse.json({ data: [], total: 0 })
+
+    const filteredIds = await getFilteredEntityIds(sp)
+    if (filteredIds && filteredIds.length === 0) return NextResponse.json({ data: [], total: 0 })
+
+    let finalEntityIds: string[] | null = null
+    if (scopedIds && filteredIds) finalEntityIds = scopedIds.filter(id => filteredIds.includes(id))
+    else finalEntityIds = scopedIds || filteredIds
+    if (finalEntityIds && finalEntityIds.length === 0) return NextResponse.json({ data: [], total: 0 })
+
+    const scheduledIds = await getScheduledEventIds(sp)
+    if (scheduledIds && scheduledIds.length === 0) return NextResponse.json({ data: [], total: 0 })
 
     let query = supabaseAdmin.from('events').select(
       'id, process_id, slug, name, status, under_review, booking_open, event_status, entity_id, created_at', { count: 'exact' }
     )
     if (search) query = query.or(`name.ilike.%${search}%,process_id.ilike.%${search}%`)
-    if (status) query = query.eq('status', status)
+    if (statusList.length) query = query.in('status', statusList)
     else query = query.neq('status', 'deleted')
+    if (finalEntityIds) query = query.in('entity_id', finalEntityIds)
+    if (scheduledIds) query = query.in('id', scheduledIds)
+    if (createdFrom) query = query.gte('created_at', createdFrom)
+    if (createdTo) query = query.lte('created_at', `${createdTo}T23:59:59`)
 
     const { data: rows, error, count } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!rows?.length) return NextResponse.json({ data: [], total: 0 })
 
-    const entityIds = [...new Set(rows.map(r => r.entity_id).filter(Boolean))]
-    const { data: entities } = entityIds.length
-      ? await supabaseAdmin.from('entities').select('id, slug').in('id', entityIds)
+    const entityIds2 = [...new Set(rows.map(r => r.entity_id).filter(Boolean))]
+    const { data: entities } = entityIds2.length
+      ? await supabaseAdmin.from('entities').select('id, slug, display_name, reporting_company_id').in('id', entityIds2)
       : { data: [] }
-    const slugMap = Object.fromEntries((entities || []).map((e: any) => [e.id, e.slug]))
-    const data = rows.map(r => ({ ...r, entity_slug: slugMap[r.entity_id] || '' }))
+    const entityMap = Object.fromEntries((entities || []).map((e: any) => [e.id, e]))
+
+    const companyIds2 = [...new Set((entities || []).map((e: any) => e.reporting_company_id).filter(Boolean))]
+    const { data: companies } = companyIds2.length
+      ? await supabaseAdmin.from('companies').select('id, display_name').in('id', companyIds2)
+      : { data: [] }
+    const companyMap = Object.fromEntries((companies || []).map((c: any) => [c.id, c.display_name]))
+
+    const { data: addrRows } = entityIds2.length
+      ? await supabaseAdmin.from('entity_addresses').select('entity_id, city').eq('address_type', 'registered').in('entity_id', entityIds2)
+      : { data: [] }
+    const cityLocIds = [...new Set((addrRows || []).map((a: any) => a.city).filter(Boolean))]
+    const { data: cityLocs } = cityLocIds.length
+      ? await supabaseAdmin.from('locations').select('id, name').in('id', cityLocIds)
+      : { data: [] }
+    const cityNameMap = Object.fromEntries((cityLocs || []).map((l: any) => [l.id, l.name]))
+    const entityCityMap = Object.fromEntries((addrRows || []).map((a: any) => [a.entity_id, cityNameMap[a.city] || '']))
+
+    const data = rows.map(r => ({
+      ...r,
+      entity_slug: entityMap[r.entity_id]?.slug || '',
+      entity_name: entityMap[r.entity_id]?.display_name || '',
+      reporting_office: companyMap[entityMap[r.entity_id]?.reporting_company_id] || '',
+      city: entityCityMap[r.entity_id] || ''
+    }))
 
     return NextResponse.json({ data, total: count })
   }
@@ -201,8 +387,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'save_step3_additional') {
-      const { min_age, event_duration_minutes, refund_allowed, description, terms_conditions } = body
+      const { min_age, event_duration_minutes, refund_allowed, description, terms_conditions, tag_ids } = body
       if (!id || !description) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      if (!tag_ids || !tag_ids.length) return NextResponse.json({ error: 'At least one tag is required' }, { status: 400 })
+      const { data: setting } = await supabaseAdmin.from('platform_settings').select('value').eq('key', 'max_event_tags').maybeSingle()
+      const maxTags = setting ? parseInt(setting.value) : 3
+      if (tag_ids.length > maxTags) return NextResponse.json({ error: `Maximum ${maxTags} tags allowed` }, { status: 400 })
+
       const payload: any = {
         min_age: min_age || null, event_duration_minutes: event_duration_minutes || null,
         refund_allowed: !!refund_allowed, description, terms_conditions, updated_at: new Date().toISOString()
@@ -210,8 +401,23 @@ export async function POST(req: NextRequest) {
       if (existing?.status === 'active') payload.under_review = true
       const { data, error } = await supabaseAdmin.from('events').update(payload).eq('id', id).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      await supabaseAdmin.from('event_tag_assignments').delete().eq('event_id', id)
+      await supabaseAdmin.from('event_tag_assignments').insert(tag_ids.map((tag_id: string) => ({ event_id: id, tag_id })))
+
       return NextResponse.json({ data })
     }
+  }
+
+  if (action === 'submit_for_approval') {
+    const { id } = body
+    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+    const { data: existing } = await supabaseAdmin.from('events').select('status').eq('id', id).maybeSingle()
+    if (!existing) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    if (existing.status !== 'draft') return NextResponse.json({ error: 'Only Draft events can be submitted for approval' }, { status: 400 })
+    const { data, error } = await supabaseAdmin.from('events').update({ status: 'pending', updated_at: new Date().toISOString() }).eq('id', id).select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ data })
   }
 
   if (action === 'save_social_links') {

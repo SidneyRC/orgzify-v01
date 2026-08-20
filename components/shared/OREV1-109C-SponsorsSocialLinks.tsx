@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import OREV1109DSponsorSearchAdd from '@/components/shared/OREV1-109D-SponsorSearchAdd'
+import OREV1117DArtistSection from '@/components/shared/OREV1-117D-ArtistSection'
 const SPONSORS_API = '/biz/events/sponsors/api'
 const LINKS_API = '/biz/events/sociallinks/api'
 const PLATFORMS = ['Facebook', 'Instagram', 'X', 'YouTube', 'Website', 'Other']
@@ -61,6 +62,7 @@ export default function OREV1109CSponsorsSocialLinks({ eventId, locked, theme }:
         )}
         {!locked && <OREV1109DSponsorSearchAdd locked={locked} theme={theme} onAssign={handleAssign} />}
       </div>
+      <OREV1117DArtistSection eventId={eventId} locked={locked} theme={theme} />
       <div>
         <h3 className="text-sm font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Social Media Links (optional)</h3>
         {links.length > 0 && (

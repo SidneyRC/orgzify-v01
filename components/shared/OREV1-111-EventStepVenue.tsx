@@ -31,7 +31,7 @@ export default function OREV1111EventStepVenue({ eventId, entityId, entitySlug, 
   const ref = useRef<HTMLFieldSetElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = () => { fetch(`${API}?event_id=${eventId}`).then(r => r.json()).then(j => { console.log('VENUE LOAD RESULT:', j); setSelected(j.selected || []); setLoading(false) }) }
+  const load = () => { fetch(`${API}?event_id=${eventId}`).then(r => r.json()).then(j => { setSelected(j.selected || []); setLoading(false) }) }
   useEffect(load, [eventId])
 
   useEffect(() => {
@@ -133,7 +133,9 @@ export default function OREV1111EventStepVenue({ eventId, entityId, entitySlug, 
       <div className="flex justify-end gap-2">
         <button onClick={onBack} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">← Back</button>
         <button onClick={onClose} style={outlineBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">✕ Close</button>
-        {!locked && <button onClick={handleContinue} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">Continue</button>}
+        {!locked
+          ? <button onClick={handleContinue} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">Continue</button>
+          : <button onClick={onContinue} style={primaryBtn} className="text-sm font-medium px-5 py-2.5 hover:opacity-90 transition">Next →</button>}
       </div>
     </div>
   )
