@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
+        // Update last login timestamp
+    await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', user.id);
+
     // Get default profile (includes full_name for display cookie)
     const { data: profile } = await supabase
       .from('profiles')

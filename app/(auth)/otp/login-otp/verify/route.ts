@@ -46,6 +46,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'User not found.' }, { status: 404 });
     }
 
+        // Update last login timestamp
+    await supabaseAdmin.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', user.id);
+
     // Get default profile
     const { data: profile } = await supabaseAdmin
       .from('profiles')
