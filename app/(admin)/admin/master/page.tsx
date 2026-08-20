@@ -19,12 +19,14 @@ async function getTheme() {
 }
 
 async function getCounts() {
-  const [{ count: l1 }, { count: l2 }, { count: tags }] = await Promise.all([
+  const [{ count: l1 }, { count: l2 }, { count: tags }, { count: sponsors }, { count: artists }] = await Promise.all([
     supabaseAdmin.from("categories").select("*", { count: "exact", head: true }).eq("level", 1).eq("status", "active"),
     supabaseAdmin.from("categories").select("*", { count: "exact", head: true }).eq("level", 2).eq("status", "active"),
     supabaseAdmin.from("event_tags_format").select("*", { count: "exact", head: true }).eq("status", "active"),
+        supabaseAdmin.from("sponsors").select("*", { count: "exact", head: true }).eq("status", "approved").eq("is_enabled", true),
+    supabaseAdmin.from("artists").select("*", { count: "exact", head: true }).eq("status", "active"),
   ]);
-  return { l1: l1 ?? 0, l2: l2 ?? 0, tags: tags ?? 0 };
+  return { l1: l1 ?? 0, l2: l2 ?? 0, tags: tags ?? 0, sponsors: sponsors ?? 0, artists: artists ?? 0 };
 }
 
 // Active venues, scoped to the logged-in user's company + downline via
@@ -62,9 +64,17 @@ export default async function MasterPage() {
       title: "Event Tags Format", description: "Format tags used across Events (e.g. Kids, Competition, Workshop)",
       href: "/admin/master/event-tags-format", meta: `Tag : ${counts.tags}`, icon: "🏷️",
     },
-    {
+        {
       title: "Venue", description: "Physical locations used for Events and future modules",
       href: "/admin/master/venue", meta: `Active Venue : ${venueCount}`, icon: "📍",
+    },
+    {
+      title: "Sponsors", description: "Sponsor brands used across Events",
+      href: "/admin/sponsors", meta: `Active Sponsor : ${counts.sponsors}`, icon: "🎗️",
+    },
+    {
+      title: "Artists", description: "Performers and artists used across Events",
+      href: "/admin/artists", meta: `Active Artist : ${counts.artists}`, icon: "🎤",
     },
   ];
 
