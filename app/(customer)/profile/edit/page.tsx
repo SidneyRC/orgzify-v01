@@ -32,6 +32,8 @@ export default function ProfileEditPage() {
   const [academy, setAcademy]               = useState("");
   const [newOrgEntry, setNewOrgEntry]       = useState<{ name: string; type: string } | null>(null);
   const [city, setCity]                     = useState("");
+  const [countryId, setCountryId]           = useState("");
+  const [countries, setCountries]           = useState<{ id: string; name: string }[]>([]);
   const [pincode, setPincode]               = useState("");
   const [anniversary, setAnniversary]       = useState("");
   const [interests, setInterests]           = useState<string[]>([]);
@@ -68,13 +70,14 @@ export default function ProfileEditPage() {
   // ── Load profile from DB ───────────────────────────────────────────────────
   useEffect(() => {
     router.refresh();
-    fetch("/profile/api").then(r => r.json()).then(({ profile }) => {
+      fetch("/profile/api").then(r => r.json()).then(({ profile, countries: countriesList }) => {
       if (!profile) return;
       setProfileId(profile.id || "");
       setZyId(profile.zy_id || "");
       setEmail(profile.email || "");
       setPhoto(profile.photo_url ? `${profile.photo_url}?v=${Date.now()}` : null);
       setSpouseProfileId(profile.spouse_profile_id || null);
+      setCountries(countriesList || []);
 
       const draft = sessionStorage.getItem(DRAFT_KEY);
       if (draft) {
@@ -90,6 +93,7 @@ export default function ProfileEditPage() {
         setFollowUp(d.followUp ?? profile.current_status_detail ?? "");
         setAcademy(d.academy ?? "");
         setCity(d.city ?? profile.city ?? "");
+        setCountryId(d.countryId ?? profile.country_id ?? "");
         setPincode(d.pincode ?? profile.pincode ?? "");
         setAnniversary(d.anniversary ?? profile.anniversary_date ?? "");
         setInterests(d.interests ?? (profile.area_of_interest ? JSON.parse(profile.area_of_interest) : []));
@@ -104,7 +108,8 @@ export default function ProfileEditPage() {
         setGender(profile.gender || "");
         setStatus(profile.current_status || "");
         setFollowUp(profile.current_status_detail || "");
-        setCity(profile.city || "");
+                setCity(profile.city || "");
+        setCountryId(profile.country_id || "");
         setPincode(profile.pincode || "");
         setAnniversary(profile.anniversary_date || "");
         setAbout(profile.about || "");
@@ -133,8 +138,8 @@ export default function ProfileEditPage() {
   const markDirty    = () => setIsDirty(true);
   const discardDraft = () => { sessionStorage.removeItem(DRAFT_KEY); setHasDraft(false); setIsDirty(false); router.refresh(); };
 
-  const completion = Math.round(
-    ([photo, fullName, mobile, dob, gender, status, city, interests.length > 0 ? "y" : ""].filter(Boolean).length / 8) * 100
+    const completion = Math.round(
+    ([photo, fullName, mobile, dob, gender, status, city, countryId, interests.length > 0 ? "y" : ""].filter(Boolean).length / 9) * 100
   );
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,7 +167,8 @@ export default function ProfileEditPage() {
     const mandatory: Record<string,string> = { school_student:"School Name", college_student:"College Name", working_professional:"Company Name", self_employed:"Company Name" };
     if (mandatory[status] && !followUp.trim()) return showToast("error", `${mandatory[status]} is required.`);
     if (interests.length === 0) return showToast("error", "Please select at least one Area of Interest.");
-    if (!city.trim())           return showToast("error", "City is required.");
+        if (!city.trim())     return showToast("error", "City is required.");
+    if (!countryId)       return showToast("error", "Country is required.");
     setLoading(true);
     try {
       let photoUrl: string | undefined;
@@ -176,7 +182,7 @@ export default function ProfileEditPage() {
       const res = await fetch("/profile/api", { method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, full_name: fullName, mobile, whatsapp, whatsapp_number: whatsappNumber,
           dob, gender, current_status: status, current_status_detail: followUp,
-          city, pincode, anniversary_date: anniversary, area_of_interest: interests, about,
+                    city, pincode, country_id: countryId, anniversary_date: anniversary, area_of_interest: interests, about,
           ...(photoUrl && { photo_url: photoUrl }) }) });
       const data = await res.json();
       if (!res.ok) { setLoading(false); showToast("error", data.error || "Failed to save profile. Please try again."); return; }
@@ -278,8 +284,9 @@ export default function ProfileEditPage() {
             status={status} onStatusChange={wrap(setStatus)} followUp={followUp} onFollowUpChange={wrap(setFollowUp)}
             academy={academy} onAcademyChange={wrap(setAcademy)} showToast={showToast}
             newOrgEntry={newOrgEntry} onNewOrgEntry={setNewOrgEntry} />
-          <ProfileFormBottom
+                    <ProfileFormBottom
             city={city} onCityChange={wrap(setCity)} pincode={pincode} onPincodeChange={wrap(setPincode)}
+            countryId={countryId} onCountryIdChange={wrap(setCountryId)} countries={countries}
             anniversary={anniversary} onAnniversaryChange={wrap(setAnniversary)}
             showSpouseInvite={showSpouseInvite} onShowSpouseInvite={setShowSpouseInvite}
             spouseName={spouseName} onSpouseNameChange={setSpouseName}

@@ -15,13 +15,19 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-  const { data: userData } = await supabase
+    const { data: userData } = await supabase
     .from('users')
     .select('zy_id, email')
     .eq('id', session.user_id)
     .single();
 
-  return NextResponse.json({ profile: { ...data, zy_id: userData?.zy_id, email: userData?.email } });
+  const { data: countries } = await supabase
+    .from('country_master')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name');
+
+  return NextResponse.json({ profile: { ...data, zy_id: userData?.zy_id, email: userData?.email }, countries: countries || [] });
 }
 
 // PUT — Save profile data
@@ -31,8 +37,8 @@ export async function PUT(req: NextRequest) {
 
   const {
     title, full_name, mobile, whatsapp, whatsapp_number,
-    dob, gender, current_status, current_status_detail,
-    city, pincode, anniversary_date, area_of_interest, about, photo_url,
+      dob, gender, current_status, current_status_detail,
+    city, pincode, anniversary_date, area_of_interest, about, photo_url, country_id,
   } = await req.json();
 
   // ── Mobile duplicate check ─────────────────────────────────────────────────
@@ -53,9 +59,9 @@ export async function PUT(req: NextRequest) {
   const wa_number = whatsapp ? mobile : whatsapp_number;
 
   // Check mandatory fields for profile completion
-  const is_complete = !!(
+    const is_complete = !!(
     full_name && mobile && dob && gender &&
-    current_status && city && area_of_interest?.length > 0
+    current_status && city && country_id && area_of_interest?.length > 0
   );
 
   const { error } = await supabase
@@ -71,6 +77,7 @@ export async function PUT(req: NextRequest) {
       current_status_detail,
       city,
       pincode,
+      country_id: country_id || null,
       anniversary_date:  anniversary_date || null,
       area_of_interest:  JSON.stringify(area_of_interest),
       about,

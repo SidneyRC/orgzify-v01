@@ -7,6 +7,7 @@ import SpouseInviteSection from "@/components/shared/OREV1-015A-SpouseInviteSect
 
 interface Props {
   city: string; onCityChange: (v: string) => void;
+  countryId: string; onCountryIdChange: (v: string) => void; countries: { id: string; name: string }[];
   pincode: string; onPincodeChange: (v: string) => void;
   anniversary: string; onAnniversaryChange: (v: string) => void;
   showSpouseInvite: boolean; onShowSpouseInvite: (v: boolean) => void;
@@ -20,7 +21,7 @@ interface Props {
 }
 
 export default function ProfileFormBottom({
-  city, onCityChange, pincode, onPincodeChange,
+  city, onCityChange, countryId, onCountryIdChange, countries, pincode, onPincodeChange,
   anniversary, onAnniversaryChange, showSpouseInvite, onShowSpouseInvite,
   spouseName, onSpouseNameChange, spouseEmail, onSpouseEmailChange,
   onSpouseSend, onSpouseSkip, spouseLoading,
@@ -33,7 +34,7 @@ export default function ProfileFormBottom({
     <div className="px-4">
       <div className="border-t border-gray-100 my-5" />
 
-      {/* City + Pincode */}
+           {/* City + Pincode */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div>
           <label className="block text-sm text-gray-600 mb-1.5">City <span className="text-red-500">*</span></label>
@@ -43,6 +44,15 @@ export default function ProfileFormBottom({
           <label className="block text-sm text-gray-600 mb-1.5">Pincode <span className="text-xs text-gray-400">opt.</span></label>
           <input type="text" value={pincode} onChange={(e) => onPincodeChange(e.target.value)} placeholder="600001" className={input} />
         </div>
+      </div>
+
+      {/* Country */}
+      <div className="mb-4">
+        <label className="block text-sm text-gray-600 mb-1.5">Country <span className="text-red-500">*</span></label>
+        <select value={countryId} onChange={(e) => onCountryIdChange(e.target.value)} className={input}>
+          <option value="">Select country</option>
+          {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
       </div>
 
       {/* Anniversary */}
