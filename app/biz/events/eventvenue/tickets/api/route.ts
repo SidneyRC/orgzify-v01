@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest) {
       else insertRows.push({ ticket_type_id: ticket_id, event_venue_time_id: timeId, ...slotValues })
     }
 
-        const tasks: Promise<any>[] = [supabaseAdmin.from('event_ticket_types').update(identityUpdate).eq('id', ticket_id)]
+        const tasks: any[] = [supabaseAdmin.from('event_ticket_types').update(identityUpdate).eq('id', ticket_id)]
     if (updateIds.length > 0) tasks.push(supabaseAdmin.from('event_ticket_assignments').update(slotValues).in('id', updateIds))
     if (insertRows.length > 0) tasks.push(supabaseAdmin.from('event_ticket_assignments').insert(insertRows))
     const results = await Promise.all(tasks)
