@@ -14,7 +14,7 @@ async function resolveThemeFromCompany(startId: string) {
   const visited = new Set<string>()
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId)
-    const { data: company } = await supabaseAdmin
+    const { data: company }: { data: { id: string; reporting_company_id: string | null; theme_id: string | null } | null } = await supabaseAdmin
       .from('companies')
       .select('id, reporting_company_id, theme_id')
       .eq('id', currentId)
