@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `${BASE_URL}/event/${params.slug}` },
+    alternates: { canonical: `${BASE_URL}/event/${slug}` },
     openGraph: { title, description, images: [{ url: event.banners[0]?.file_url || "" }] },
   };
 }
@@ -61,7 +61,7 @@ export default async function EventPage({ params }: Props) {
       { "@type": "ListItem", position: 1, name: "Home", item: BASE_URL },
       { "@type": "ListItem", position: 2, name: "Events", item: `${BASE_URL}/events` },
       { "@type": "ListItem", position: 3, name: event.category_name, item: `${BASE_URL}/events?category=${event.category_name}` },
-      { "@type": "ListItem", position: 4, name: event.name, item: `${BASE_URL}/event/${params.slug}` },
+      { "@type": "ListItem", position: 4, name: event.name, item: `${BASE_URL}/event/${slug}` },
     ],
   };
 
