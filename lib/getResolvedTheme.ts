@@ -15,7 +15,7 @@ export async function getResolvedTheme(companyId: string): Promise<Theme | null>
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId)
 
-    const { data: company } = await supabaseAdmin
+        const { data: company }: { data: { id: string; reporting_company_id: string | null; customer_theme_id: string | null } | null } = await supabaseAdmin
       .from('companies')
       .select('id, reporting_company_id, customer_theme_id')
       .eq('id', currentId)
