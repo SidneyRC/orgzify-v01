@@ -51,7 +51,8 @@ export default function OREV1048AGeofenceAssign() {
   }, [companyId])
 
   useEffect(() => { fetchLocations() }, [level])
-  useEffect(() => { if (tab === 'assigned') fetchAssigned() }, [tab])
+  useEffect(() => { fetchAssigned() }, [])
+useEffect(() => { if (tab === 'assigned') fetchAssigned() }, [tab])
 
   const toggleSelect = (row: LocationRow) => {
     if (row.owned_by) return

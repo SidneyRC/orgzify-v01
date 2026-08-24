@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import CategorySection from "@/components/CategorySection";
 import Navbar from "@/components/shared/OREV1-026-Navbar";
+import { headers } from "next/headers";
+import CityGate from "@/components/shared/OREV1-139-CityGate";
+import { ThemeProvider } from "@/lib/ThemeContext";
+import { getResolvedThemeByCity } from "@/lib/getResolvedThemeByCity";
 
 const BASE_URL = "https://www.orgzify.com";
 
@@ -49,11 +53,18 @@ const softwareAppJsonLd = {
   url: BASE_URL,
 };
 
-export default function Home() {
+export default async function Home() {
+  const cookieHeader = (await headers()).get("cookie") ?? "";
+  const hasCity = /(^|;\s*)orgzify_city_id=/.test(cookieHeader);
+  const cityMatch = cookieHeader.match(/(^|;\s*)orgzify_city_id=([^;]+)/);
+  const cityId = cityMatch ? decodeURIComponent(cityMatch[2]) : null;
+  const theme = await getResolvedThemeByCity(cityId);
+
   return (
-    <>
+    <ThemeProvider initial={theme}>
       {/* JSON-LD for this page */}
-      <Navbar />
+      <Navbar theme={theme} />
+      <CityGate hasCity={hasCity} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppJsonLd) }}
@@ -273,6 +284,6 @@ export default function Home() {
         </footer>
 
       </div>
-    </>
+    </ThemeProvider>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "@/lib/ThemeContext";
 import NavUserDropdown from "@/components/shared/OREV1-027-NavUserDropdown";
 import NavMobile from "@/components/shared/OREV1-028-NavMobile";
 
@@ -14,6 +15,7 @@ type UserData = {
 } | null;
 
 export default function NavUserSection({ initialName, initialAvatar }: { initialName: string; initialAvatar: string }) {
+  const { theme } = useTheme();
   const [user, setUser] = useState<UserData>(null);
   const [displayName, setDisplayName] = useState<string>(initialName);
   const [displayAvatar, setDisplayAvatar] = useState<string>(initialAvatar);
@@ -24,7 +26,6 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
     fetch('/profile/me')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        // /profile/me returns { profile: {...} }
         const p = data?.profile ?? data;
         if (p) {
           setUser({
@@ -35,7 +36,6 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
             companies: p.companies ?? [],
             entities: p.entities ?? [],
             });
-          // full_name includes title e.g. "Mr. Sidney" — take first non-title word
           if (p.full_name) {
             const parts = p.full_name.split(' ');
             setDisplayName(parts.find((w: string) => !w.endsWith('.')) ?? parts[0] ?? '');
@@ -75,16 +75,26 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
   ? { name: user.full_name, avatar: displayAvatar, ...user }
   : { name: displayName, avatar: displayAvatar, zy_id: '', is_complete: true, is_super_admin: false, companies: [], entities: [] };
 
+  const outlineStyle = {
+    backgroundColor: theme?.btn_outline_bg || '#ffffff',
+    color: theme?.btn_outline_text || '#1e3a8a',
+    border: `1px solid ${theme?.btn_outline_border || '#1e3a8a'}`,
+  };
+  const filledStyle = {
+    backgroundColor: theme?.btn_bg || '#1e3a8a',
+    color: theme?.btn_text || '#ffffff',
+  };
+
   return (
     <>
       {/* Desktop nav items — hidden on mobile */}
-      <button onClick={handleHostEvent}
-        className="hidden md:block text-blue-900 border border-blue-900 px-4 py-2 rounded-full text-sm font-semibold hover:bg-blue-50 transition">
+      <button onClick={handleHostEvent} style={outlineStyle}
+        className="hidden md:block px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition">
         Host Event
       </button>
 
-      <button onClick={handleGetStarted}
-        className="hidden md:block bg-blue-900 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-blue-800 transition">
+      <button onClick={handleGetStarted} style={filledStyle}
+        className="hidden md:block px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition">
         Get Started
       </button>
 
@@ -92,8 +102,8 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
         {isLoggedIn ? (
           <NavUserDropdown user={userForDropdown} onLogout={handleLogout} />
         ) : (
-          <a href="/login"
-            className="text-blue-900 border border-blue-900 px-4 py-2 rounded-full text-sm font-semibold hover:bg-blue-50 transition">
+          <a href="/login" style={outlineStyle}
+            className="px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition">
             Login
           </a>
         )}
@@ -101,7 +111,8 @@ export default function NavUserSection({ initialName, initialAvatar }: { initial
 
       {/* Mobile nav — hidden on desktop */}
       <div className="md:hidden">
-        <NavMobile
+                <NavMobile
+          theme={theme}
           isLoggedIn={isLoggedIn}
           userName={displayName}
           onHostEvent={handleHostEvent}

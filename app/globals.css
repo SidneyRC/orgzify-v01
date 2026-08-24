@@ -93,6 +93,11 @@ html, body {
 ::-webkit-scrollbar-thumb { background: var(--color-border-md); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
+/* ── Customer-facing area — slightly larger base font ── */
+.orgz-customer-area {
+  font-size: 1rem;
+}
+
 /* ── Page-specific font overrides ──
    Import additional Google Fonts here for
    pages that need a different typeface.

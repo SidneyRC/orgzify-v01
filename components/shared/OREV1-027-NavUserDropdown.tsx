@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "@/lib/ThemeContext";
 import BellDropdown from "@/components/shared/OREV1-018-BellDropdown";
 import BusinessProfileList, { Company, Entity } from "@/components/shared/OREV1-073-BusinessProfileList";
 
@@ -18,17 +19,13 @@ export default function NavUserDropdown({
   onLogout: () => void;
   onCompanySelect?: (company_id: string, slug: string) => void;
 }) {
+  const { theme } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Companies/Entities shown start as whatever the page already loaded,
-  // but get refreshed fresh every time the dropdown is opened — so status
-  // changes made elsewhere (e.g. Admin approving/rejecting) show up
-  // immediately next time this is opened, instead of needing a full
-  // page reload.
   const [liveCompanies, setLiveCompanies] = useState<Company[]>(user.companies);
   const [liveEntities, setLiveEntities] = useState<Entity[]>(user.entities ?? []);
 
@@ -56,18 +53,26 @@ export default function NavUserDropdown({
 
   const go = (path: string) => { setDropdownOpen(false); router.push(path); };
 
-  // Company/Entity clicks also notify the parent (for cookie-context UI updates)
-  // before navigating, so onCompanySelect still fires alongside the shared list's own logic.
   const handleBusinessNavigate = (path: string) => {
     setDropdownOpen(false);
     if (onCompanySelect && path === '/admin') onCompanySelect('', '');
     router.push(path);
   };
 
+  const avatarBg = theme?.avatar_bg || '#1e3a8a';
+  const avatarText = theme?.avatar_text || '#ffffff';
+  const dropdownBg = theme?.dropdown_bg || '#ffffff';
+  const hoverBg = theme?.dropdown_hover_bg || '#f9fafb';
+  const dividerColor = theme?.divider_color || '#f3f4f6';
+  const inputBorder = theme?.input_border || '#e5e7eb';
+  const textPrimary = theme?.color_text_primary || '#1f2937';
+  const textSecondary = theme?.color_text_secondary || '#374151';
+  const textMuted = theme?.color_text_muted || '#9ca3af';
+
   return (
     <div className="flex items-center gap-2">
 
-      {/* Bell */}
+      {/* Bell — stays neutral, not theme-driven (confirmed) */}
       <div className="relative" ref={bellRef}>
         <button onClick={() => setBellOpen(!bellOpen)}
           className="relative p-2 rounded-full hover:bg-gray-100 transition">
@@ -81,28 +86,32 @@ export default function NavUserDropdown({
 
       {/* Avatar Dropdown */}
       <div className="relative" ref={dropdownRef}>
-        <button onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50 transition">
+        <button onClick={() => setDropdownOpen(!dropdownOpen)} style={{ borderColor: inputBorder }}
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = hoverBg)}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition">
           {user.avatar ? (
             <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover" />
           ) : (
-            <div className="w-7 h-7 rounded-full bg-blue-900 flex items-center justify-center text-white text-xs font-bold">
+            <div style={{ backgroundColor: avatarBg, color: avatarText }}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold">
               {(user.name || "?").charAt(0).toUpperCase()}
             </div>
           )}
-          <span className="text-sm font-semibold text-gray-800 hidden md:block">Hi, {(user.name || "").split(" ")[0]}</span>
-          <svg className={`w-4 h-4 text-gray-500 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span style={{ color: textPrimary }} className="text-sm font-semibold hidden md:block">Hi, {(user.name || "").split(" ")[0]}</span>
+          <svg style={{ color: textMuted }} className={`w-4 h-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
 
         {dropdownOpen && (
-          <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-lg border border-gray-100 py-2 z-50 max-h-[75vh] overflow-y-auto">
+          <div style={{ backgroundColor: dropdownBg, borderColor: dividerColor }}
+            className="absolute right-0 mt-2 w-64 rounded-2xl shadow-lg border py-2 z-50 max-h-[75vh] overflow-y-auto">
 
             {/* User Info */}
-            <div className="px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-bold text-gray-800">{user.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
+            <div style={{ borderColor: dividerColor }} className="px-4 py-3 border-b">
+              <p style={{ color: textPrimary }} className="text-sm font-bold">{user.name}</p>
+              <p style={{ color: textMuted }} className="text-xs mt-0.5">{user.email}</p>
             </div>
 
             {/* My Account */}
@@ -111,9 +120,11 @@ export default function NavUserDropdown({
               { label: "Manage Profiles", href: "/profiles",     icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v2h5m0-2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" },
               { label: "My Bookings",     href: "/bookings",     icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
             ].map(({ label, href, icon }) => (
-              <button key={label} onClick={() => go(href)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <button key={label} onClick={() => go(href)} style={{ color: textSecondary }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = hoverBg)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition text-left">
+                <svg style={{ color: textMuted }} className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
                 </svg>
                 {label}
@@ -129,14 +140,17 @@ export default function NavUserDropdown({
             />
 
             {/* Change Password + Logout */}
-            <div className="border-t border-gray-100 mt-1 pt-1">
-              <button onClick={() => go("/auth/change-password")}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div style={{ borderColor: dividerColor }} className="border-t mt-1 pt-1">
+              <button onClick={() => go("/auth/change-password")} style={{ color: textSecondary }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = hoverBg)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition text-left">
+                <svg style={{ color: textMuted }} className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
                 Change Password
               </button>
+              {/* Logout — stays red, not theme-driven (confirmed) */}
               <button onClick={() => { setDropdownOpen(false); onLogout(); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition text-left">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
