@@ -60,6 +60,8 @@ export interface Theme {
   avatar_bg: string;            avatar_text: string;
   notification_dot: string;     divider_color: string;
   carousel_from: string;        carousel_to: string;
+  // Mobile
+  mobile_header_bg: string;
 }
 
 // ─────────────────────────────────────────
