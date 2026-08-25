@@ -1,6 +1,6 @@
 // THIS FILE GOES IN: components/shared/OREV1-130-EventPageClient.tsx (REPLACES existing file)
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
 import OREV1120EventHeroBanner from '@/components/shared/OREV1-120-EventHeroBanner'
 import OREV1136EventTitleShare from '@/components/shared/OREV1-136-EventTitleShare'
@@ -14,9 +14,42 @@ import OREV1137MobileStickyBookBar from '@/components/shared/OREV1-137-MobileSti
 import OREV1128EventRecommendations from '@/components/shared/OREV1-128-EventRecommendations'
 import OREV1129Footer from '@/components/shared/OREV1-129-Footer'
 
-export default function OREV1130EventPageClient({ event }: { event: any }) {
+export default function OREV1130EventPageClient({ event, isLoggedIn, initialInterested, initialCount }: { event: any; isLoggedIn: boolean; initialInterested: boolean; initialCount: number }) {
   const { theme } = useTheme()
   const [selectedSlotId, setSelectedSlotId] = useState<string>(event.venues[0]?.dates[0]?.times[0]?.id || '')
+  const [interested, setInterested] = useState(initialInterested)
+  const [count, setCount] = useState(initialCount || 0)
+  const registeredRef = useRef(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('registerInterest') === '1' && isLoggedIn && !interested && !registeredRef.current) {
+      registeredRef.current = true
+      fetch('/event/event-interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: event.id }),
+      })
+        .then(res => res.json())
+        .then(data => { if (!data.error) { setInterested(data.interested); setCount(data.count) } })
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
+
+  const toggleInterested = async () => {
+    if (!isLoggedIn) {
+      const nextUrl = window.location.pathname + '?registerInterest=1'
+      window.location.href = '/login?next=' + encodeURIComponent(nextUrl)
+      return
+    }
+    const res = await fetch('/event/event-interest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: event.id }),
+    })
+    const data = await res.json()
+    if (!data.error) { setInterested(data.interested); setCount(data.count) }
+  }
 
   return (
     <div className="min-h-screen pb-20 lg:pb-0" style={{ backgroundColor: theme?.page_bg || '#fff' }}>
@@ -32,6 +65,9 @@ export default function OREV1130EventPageClient({ event }: { event: any }) {
               payment={event.payment}
               selectedSlotId={selectedSlotId}
               onSelectSlot={setSelectedSlotId}
+              interested={interested}
+              count={count}
+              onToggleInterested={toggleInterested}
               hideBookButton
             />
           </div>
@@ -49,6 +85,9 @@ export default function OREV1130EventPageClient({ event }: { event: any }) {
             payment={event.payment}
             selectedSlotId={selectedSlotId}
             onSelectSlot={setSelectedSlotId}
+            interested={interested}
+            count={count}
+            onToggleInterested={toggleInterested}
           />
         </div>
       </div>

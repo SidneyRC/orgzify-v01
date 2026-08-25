@@ -50,8 +50,8 @@ export async function getEventBySlugOrCode(value: string) {
     supabaseAdmin.from('event_booking_upi').select('upi_id, display_name').eq('event_id', event.id),
   ])
 
-  const venues = await buildVenues(eventVenues || [])
-  const { ticketsBySlot, nextUpcomingSlotId } = await buildTickets(venues, ticketTypes || [])
+    const venues = await buildVenues(eventVenues || [])
+    const { ticketsBySlot, nextUpcomingSlotId, upcomingSlotIds, pastSlotIds, lowestActivePrice, hasFastFilling, slotStatusById } = await buildTickets(venues, ticketTypes || [], event.event_duration_minutes || 0)
 
   return {
     ...event,
@@ -65,6 +65,11 @@ export async function getEventBySlugOrCode(value: string) {
     venues,
     ticketsBySlot,
     nextUpcomingSlotId,
+    upcomingSlotIds,
+    pastSlotIds,
+    lowestActivePrice,
+    hasFastFilling,
+    slotStatusById,
     artists: (artistLinks || []).map((a: any) => a.artists).filter(Boolean),
     sponsors: (sponsorLinks || []).map((s: any) => s.sponsors).filter(Boolean),
     payment: buildPayment(bookingMethods, upiRows || []),
@@ -119,7 +124,7 @@ async function buildVenues(eventVenues: any[]) {
   return venues
 }
 
-async function buildTickets(venues: any[], ticketTypes: any[]) {
+async function buildTickets(venues: any[], ticketTypes: any[], durationMin: number) {
   const ticketsBySlot: Record<string, any[]> = {}
   const allSlots: { id: string; date: string; time: string }[] = []
 
@@ -132,19 +137,45 @@ async function buildTickets(venues: any[], ticketTypes: any[]) {
           .select('price, quantity, ticket_type_id')
           .eq('event_venue_time_id', t.id)
           .eq('is_enabled', true)
-        ticketsBySlot[t.id] = (assigned || []).map((a: any) => {
-          const tt = ticketTypes.find((x: any) => x.id === a.ticket_type_id)
-          return { id: a.ticket_type_id, name: tt?.name || '', price: a.price }
-        })
+        ticketsBySlot[t.id] = (assigned || [])
+          .map((a: any) => {
+            const tt = ticketTypes.find((x: any) => x.id === a.ticket_type_id)
+            if (!tt) return null
+            return { id: a.ticket_type_id, name: tt.name, price: a.price, fastFilling: !!tt.fast_selling_forced }
+          })
+          .filter(Boolean)
       }
     }
   }
 
+  const GRACE_MIN = 10
   const now = new Date()
-  const future = allSlots
-    .filter(s => new Date(`${s.date}T${s.time}`) >= now)
-    .sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime())
+  const sorted = [...allSlots].sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime())
 
-  const nextUpcomingSlotId = future[0]?.id || allSlots[0]?.id || null
-  return { ticketsBySlot, nextUpcomingSlotId }
+  const slotStatusById: Record<string, { status: 'upcoming' | 'live' | 'past'; locked: boolean }> = {}
+  for (const s of sorted) {
+    const start = new Date(`${s.date}T${s.time}`)
+    const end = new Date(start.getTime() + durationMin * 60000)
+    const graceEnd = new Date(start.getTime() + GRACE_MIN * 60000)
+    let status: 'upcoming' | 'live' | 'past' = 'upcoming'
+    if (now >= end) status = 'past'
+    else if (now >= start) status = 'live'
+    const locked = status === 'live' && now >= graceEnd
+    slotStatusById[s.id] = { status, locked }
+  }
+
+  const upcomingSlotIds = sorted.filter(s => slotStatusById[s.id].status !== 'past').map(s => s.id)
+  const pastSlotIds = sorted.filter(s => slotStatusById[s.id].status === 'past').map(s => s.id)
+  const nextUpcomingSlotId = upcomingSlotIds.find(id => !slotStatusById[id].locked) || upcomingSlotIds[0] || sorted[0]?.id || null
+
+  let lowestActivePrice: number | null = null
+  let hasFastFilling = false
+  for (const slotId of upcomingSlotIds) {
+    for (const t of ticketsBySlot[slotId] || []) {
+      if (lowestActivePrice === null || t.price < lowestActivePrice) lowestActivePrice = t.price
+      if (t.fastFilling) hasFastFilling = true
+    }
+  }
+
+  return { ticketsBySlot, nextUpcomingSlotId, upcomingSlotIds, pastSlotIds, lowestActivePrice, hasFastFilling, slotStatusById }
 }

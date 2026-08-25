@@ -8,6 +8,8 @@ import { ThemeProvider } from "@/lib/ThemeContext";
 import { getResolvedTheme } from "@/lib/getResolvedTheme";
 import { getEventBySlugOrCode } from "@/lib/getEventBySlugOrCode";
 import { checkEventVisibility } from "@/lib/checkEventVisibility";
+import { getServerSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type Props = { params: Promise<{ slug: string }> };
 const BASE_URL = "https://www.orgzify.com";
@@ -31,7 +33,28 @@ export default async function EventPage({ params }: Props) {
   const cookieHeader = (await headers()).get("cookie") ?? "";
   const hasCity = /(^|;\s*)orgzify_city_id=/.test(cookieHeader);
 
-  const event = await getEventBySlugOrCode(slug);
+    const event = await getEventBySlugOrCode(slug);
+  const session = await getServerSession();
+
+    let initialInterested = false;
+  let initialCount = 0;
+  if (event) {
+    const { count } = await supabaseAdmin
+      .from('event_interests')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', event.id);
+    initialCount = count || 0;
+
+    if (session) {
+      const { data: interestRow } = await supabaseAdmin
+        .from('event_interests')
+        .select('id')
+        .eq('event_id', event.id)
+        .eq('user_id', session.user_id)
+        .maybeSingle();
+      initialInterested = !!interestRow;
+    }
+  }
 
   if (!event || !checkEventVisibility(event)) {
     return (
@@ -71,7 +94,7 @@ export default async function EventPage({ params }: Props) {
       <CityGate hasCity={hasCity} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(eventJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
-      <OREV1130EventPageClient event={event} />
+            <OREV1130EventPageClient event={event} isLoggedIn={!!session} initialInterested={initialInterested} initialCount={initialCount} />
     </ThemeProvider>
   );
 }
