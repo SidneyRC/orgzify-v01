@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode } from "react"; 
+import ThemeFocusRing from "@/components/shared/OREV1-160-ThemeFocusRing";
 
 // ─────────────────────────────────────────
 // THEME SHAPE — matches company_themes table
@@ -85,7 +86,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 export function ThemeProvider({ children, initial }: { children: ReactNode; initial?: Theme | null }) {
   const [theme, setTheme] = useState<Theme | null>(initial ?? null);
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme }}><ThemeFocusRing color={theme?.color_focus_ring} />
       {children}
     </ThemeContext.Provider>
   );

@@ -1,7 +1,7 @@
 // THIS FILE GOES IN: components/shared/OREV1-123-EventAboutSection.tsx (REPLACES existing file)
 'use client'
 import { useState } from 'react'
-import { useTheme } from '@/lib/ThemeContext'
+import { useTheme } from '@/lib/ThemeContext'; import { cleanHtml } from '@/lib/cleanHtml'
 
 export default function OREV1123EventAboutSection({ description }: { description: string }) {
   const { theme } = useTheme()
@@ -10,10 +10,10 @@ export default function OREV1123EventAboutSection({ description }: { description
   if (!description) return null
 
   return (
-    <div className="pt-4" style={{ borderTop: '1px solid ' + (theme?.divider_color || '#e5e7eb') }}>
-      <p className="text-base font-semibold mb-2" style={{ color: theme?.color_text_primary || '#111827' }}>About this event</p>
-      <div className="text-base leading-relaxed" style={{ color: theme?.color_text_secondary || '#4b5563', ...clampStyle }} dangerouslySetInnerHTML={{ __html: description }} />
-      <button onClick={() => setExpanded(!expanded)} className="text-sm font-semibold mt-2" style={{ color: theme?.link_color || '#2563eb' }}>
+    <div className="pt-6" style={{ borderTop: '1px solid ' + (theme?.divider_color || '#e5e7eb') }}>
+      <p className="text-lg font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>About this event</p>
+      <div className="text-base leading-relaxed" style={{ color: theme?.color_text_secondary || '#4b5563', ...clampStyle }} dangerouslySetInnerHTML={{ __html: cleanHtml(description) }} />
+      <button onClick={() => setExpanded(!expanded)} className="text-base font-semibold mt-2" style={{ color: theme?.link_color || '#2563eb' }}>
         {expanded ? 'Show less' : 'Read more'}
       </button>
     </div>

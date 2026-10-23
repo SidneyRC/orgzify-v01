@@ -3,10 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSession } from '@/lib/auth'
 import { getActiveCompanyId } from '@/lib/activeCompanyContext'
-import { getFullCompanyRights } from '@/lib/getCompanyRights'
-import { getDownlineIds } from '@/lib/companyScope'
+import { getFullCompanyRights } from '@/lib/getCompanyRights'; 
+import { checkEventAccess, checkEntityAccess } from '@/lib/eventAccess'
+import { buildEventBundle } from '@/lib/buildEventBundle'
+import { sendEventDecisionEmail } from '@/lib/sendEventDecisionEmail'
+import { findSessionWithoutTicket } from '@/lib/findSessionWithoutTicket'; import { findBookingUrlProblem } from '@/lib/findBookingUrlProblem'
 
-async function hasEventRight(req: NextRequest, session: any, right: string) {
+const notFound = () => NextResponse.json({ error: 'Event not found' }, { status: 404 }); async function hasEventRight(req: NextRequest, session: any, right: string) {
   if (session.is_super_admin) return true
   const activeCompanyId = await getActiveCompanyId(req.cookies)
   if (!activeCompanyId) return false
@@ -148,13 +151,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: data || [] })
   }
 
-  if (sp.get('type') === 'event_tags') {
+    if (sp.get('type') === 'event_tags') {
     const eventId = sp.get('event_id') || ''
     if (!eventId) return NextResponse.json({ data: [] })
     const { data } = await supabaseAdmin.from('event_tag_assignments')
       .select('tag_id, event_tags_format(id, name)').eq('event_id', eventId)
     const tags = (data || []).map((r: any) => Array.isArray(r.event_tags_format) ? r.event_tags_format[0] : r.event_tags_format).filter(Boolean)
     return NextResponse.json({ data: tags })
+  }
+
+  if (sp.get('type') === 'event_sub_categories') {
+    const eventId = sp.get('event_id') || ''
+    if (!eventId) return NextResponse.json({ data: [] })
+    const { data } = await supabaseAdmin.from('event_sub_categories').select('sub_category_id').eq('event_id', eventId)
+    return NextResponse.json({ data: (data || []).map((r: any) => r.sub_category_id) })
   }
 
   if (sp.get('type') === 'filter_suggestions') {
@@ -198,7 +208,7 @@ export async function GET(req: NextRequest) {
 
   const ref = sp.get('process_id')
   if (ref) {
-    const { data, error } = await supabaseAdmin.from('events').select('*').eq('process_id', ref).maybeSingle()
+    const { data, error } = await supabaseAdmin.from('events').select('*').eq('process_id', ref).maybeSingle(); if (data && !(await checkEventAccess(req, session, { eventId: data.id }, 'view')).ok) return NextResponse.json({ data: null })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ data })
   }
@@ -278,18 +288,18 @@ export async function GET(req: NextRequest) {
   if (sp.get('type') === 'list') {
     const entityId = sp.get('entity_id')
     const tab = sp.get('tab') || 'draft'
-    if (!entityId) return NextResponse.json({ error: 'Missing entity_id' }, { status: 400 })
+    if (!entityId) return NextResponse.json({ error: 'Missing entity_id' }, { status: 400 }); if (!(await checkEntityAccess(req, session, entityId, 'view'))) return NextResponse.json({ data: [], total: 0 })
     const search = sp.get('search') || ''
     const page = parseInt(sp.get('page') || '1')
     const limit = parseInt(sp.get('limit') || '10')
     const offset = (page - 1) * limit
 
-    let query = supabaseAdmin.from('events')
-      .select('id, process_id, name, slug, status, published, booking_open, under_review, event_format, updated_at', { count: 'exact' })
+      let query = supabaseAdmin.from('events')
+      .select('id, process_id, name, slug, status, published, booking_open, under_review, has_pending_edits, event_format, updated_at', { count: 'exact' })
       .eq('entity_id', entityId).neq('status', 'deleted')
     if (search) query = query.or(`name.ilike.%${search}%,process_id.ilike.%${search}%`)
 
-    if (tab === 'draft') query = query.in('status', ['draft', 'pending']).order('updated_at', { ascending: false })
+    if (tab === 'draft') query = query.or('status.in.(draft,pending),and(status.eq.active,has_pending_edits.eq.true)').order('updated_at', { ascending: false })
     else if (tab === 'unlisted') query = query.eq('status', 'active').eq('published', false).order('updated_at', { ascending: false })
     else if (tab === 'live' || tab === 'closed') query = query.eq('status', 'active').eq('published', true)
     else return NextResponse.json({ error: 'Invalid tab' }, { status: 400 })
@@ -302,7 +312,7 @@ export async function GET(req: NextRequest) {
 
     if (tab === 'draft' || tab === 'unlisted') return NextResponse.json({ data: events, total: count || 0 })
 
-    if (tab === 'live' || tab === 'closed') {
+        if (tab === 'live' || tab === 'closed') {
       const ids = events.map(e => e.id)
       const { data: times } = await supabaseAdmin
         .from('event_venue_times')
@@ -313,19 +323,28 @@ export async function GET(req: NextRequest) {
         at: new Date(`${t.event_venue_dates?.event_date}T${t.start_time}`)
       })).filter(t => ids.includes(t.event_id))
 
-      const soonestByEvent = new Map<string, Date>()
+      // Next upcoming date (future only) decides Live. If none is upcoming,
+      // fall back to the latest past date to decide/sort Closed.
+      const nextUpcomingByEvent = new Map<string, Date>()
+      const latestPastByEvent = new Map<string, Date>()
       withDates.forEach(t => {
-        const existing = soonestByEvent.get(t.event_id)
-        if (!existing || t.at < existing) soonestByEvent.set(t.event_id, t.at)
+        if (t.at >= now) {
+          const existing = nextUpcomingByEvent.get(t.event_id)
+          if (!existing || t.at < existing) nextUpcomingByEvent.set(t.event_id, t.at)
+        } else {
+          const existing = latestPastByEvent.get(t.event_id)
+          if (!existing || t.at > existing) latestPastByEvent.set(t.event_id, t.at)
+        }
       })
 
       const filtered = events.filter(e => {
-        const at = soonestByEvent.get(e.id)
-        if (!at) return false
-        return tab === 'live' ? at >= now : at < now
+        const hasUpcoming = nextUpcomingByEvent.has(e.id)
+        return tab === 'live' ? hasUpcoming : (!hasUpcoming && latestPastByEvent.has(e.id))
       }).sort((a, b) => {
-        const aAt = soonestByEvent.get(a.id)!.getTime(), bAt = soonestByEvent.get(b.id)!.getTime()
-        return tab === 'live' ? aAt - bAt : bAt - aAt
+        if (tab === 'live') {
+          return nextUpcomingByEvent.get(a.id)!.getTime() - nextUpcomingByEvent.get(b.id)!.getTime()
+        }
+        return latestPastByEvent.get(b.id)!.getTime() - latestPastByEvent.get(a.id)!.getTime()
       })
       const paged = filtered.slice(offset, offset + limit)
       return NextResponse.json({ data: paged, total: filtered.length })
@@ -341,36 +360,51 @@ export async function POST(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   const body = await req.json()
-  const { action } = body
+  const { action } = body; if (body.id && !(await checkEventAccess(req, session, { eventId: body.id }, 'edit')).ok) return notFound(); if (!body.id && body.entity_id && !(await checkEntityAccess(req, session, body.entity_id, 'edit'))) return notFound()
 
   if (action === 'save_step2_info' || action === 'save_step3_additional') {
     const { id } = body
     let existing: any = null
     if (id) {
-      const { data } = await supabaseAdmin.from('events').select('status, name').eq('id', id).maybeSingle()
+            const { data } = await supabaseAdmin.from('events')
+        .select('status, name, category_id, sub_category_id, min_age, event_duration_minutes, refund_allowed, description, terms_conditions, has_pending_edits')
+        .eq('id', id).maybeSingle()
       existing = data
-      if (existing?.status === 'pending') {
+              if (existing?.status === 'pending' && !(await hasEventRight(req, session, 'can_approve'))) {
         return NextResponse.json({ error: 'This event is awaiting Admin review and cannot be edited right now.' }, { status: 400 })
       }
     }
 
-    if (action === 'save_step2_info') {
-      const { entity_id, event_format, name, category_id, sub_category_id, languages, visibility } = body
+      if (action === 'save_step2_info') {
+      const { entity_id, event_format, name, category_id, sub_category_ids, languages, visibility } = body
       if (!entity_id || !name || !event_format) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       if (name.length > 50) return NextResponse.json({ error: 'Name must be 50 characters or less' }, { status: 400 })
+      const subIds: string[] = Array.isArray(sub_category_ids) ? sub_category_ids : []
 
       const payload: any = {
-        event_format, name, category_id: category_id || null, sub_category_id: sub_category_id || null,
+        event_format, name, category_id: category_id || null,
         languages: languages || null, visibility, updated_at: new Date().toISOString()
       }
-      if (existing?.status === 'active') payload.under_review = true
-
-      if (id) {
-        if (existing && existing.name !== name && (existing.status === 'draft' || existing.status === 'active')) {
+                  if (id) {
+                if (existing && existing.name !== name && existing.status === 'draft') {
           payload.slug = await generateSlug(name, id)
+        }
+        if (existing?.status === 'active') {
+          const { data: currentSubCats } = await supabaseAdmin.from('event_sub_categories').select('sub_category_id').eq('event_id', id)
+          const currentSubIds = (currentSubCats || []).map((r: any) => r.sub_category_id).sort()
+          const newSubIds = [...subIds].sort()
+          const subCatsChanged = JSON.stringify(currentSubIds) !== JSON.stringify(newSubIds)
+          const group2Changed = existing.name !== name
+            || (existing.category_id || null) !== (category_id || null)
+            || subCatsChanged
+          if (group2Changed) payload.has_pending_edits = true
         }
         const { data, error } = await supabaseAdmin.from('events').update(payload).eq('id', id).select().single()
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+        await supabaseAdmin.from('event_sub_categories').delete().eq('event_id', id)
+        if (subIds.length) await supabaseAdmin.from('event_sub_categories').insert(subIds.map((sub_category_id: string) => ({ event_id: id, sub_category_id })))
+
         return NextResponse.json({ data })
       }
 
@@ -383,6 +417,9 @@ export async function POST(req: NextRequest) {
         reporting_office_id: entity?.reporting_company_id || null, created_by: session.user_id
       }).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      if (subIds.length) await supabaseAdmin.from('event_sub_categories').insert(subIds.map((sub_category_id: string) => ({ event_id: data.id, sub_category_id })))
+
       return NextResponse.json({ data })
     }
 
@@ -394,11 +431,23 @@ export async function POST(req: NextRequest) {
       const maxTags = setting ? parseInt(setting.value) : 3
       if (tag_ids.length > maxTags) return NextResponse.json({ error: `Maximum ${maxTags} tags allowed` }, { status: 400 })
 
-      const payload: any = {
+            const payload: any = {
         min_age: min_age || null, event_duration_minutes: event_duration_minutes || null,
         refund_allowed: !!refund_allowed, description, terms_conditions, updated_at: new Date().toISOString()
       }
-      if (existing?.status === 'active') payload.under_review = true
+      if (existing?.status === 'active') {
+        const { data: currentTags } = await supabaseAdmin.from('event_tag_assignments').select('tag_id').eq('event_id', id)
+        const currentIds = (currentTags || []).map((t: any) => t.tag_id).sort()
+        const newIds = [...tag_ids].sort()
+        const tagsChanged = JSON.stringify(currentIds) !== JSON.stringify(newIds)
+        const group2Changed = (existing.min_age || null) !== (min_age || null)
+          || (existing.event_duration_minutes || null) !== (event_duration_minutes || null)
+          || !!existing.refund_allowed !== !!refund_allowed
+          || existing.description !== description
+          || existing.terms_conditions !== terms_conditions
+          || tagsChanged
+        if (group2Changed) payload.has_pending_edits = true
+      }
       const { data, error } = await supabaseAdmin.from('events').update(payload).eq('id', id).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -409,13 +458,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (action === 'submit_for_approval') {
+    if (action === 'submit_for_approval') {
     const { id } = body
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
-    const { data: existing } = await supabaseAdmin.from('events').select('status').eq('id', id).maybeSingle()
+        const { data: existing } = await supabaseAdmin.from('events').select('status, has_pending_edits').eq('id', id).maybeSingle()
     if (!existing) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
-    if (existing.status !== 'draft') return NextResponse.json({ error: 'Only Draft events can be submitted for approval' }, { status: 400 })
-    const { data, error } = await supabaseAdmin.from('events').update({ status: 'pending', updated_at: new Date().toISOString() }).eq('id', id).select().single()
+    if (!['draft', 'active', 'rejected'].includes(existing.status)) return NextResponse.json({ error: 'This event cannot be submitted for approval' }, { status: 400 })
+    if (existing.status === 'active' && !existing.has_pending_edits) return NextResponse.json({ error: 'No changes to submit' }, { status: 400 })
+    const fields: any = { updated_at: new Date().toISOString() }
+    const missing = await findSessionWithoutTicket(id)
+    if (missing) return NextResponse.json({ error: missing }, { status: 400 }); const urlProblem = await findBookingUrlProblem(id); if (urlProblem) return NextResponse.json({ error: urlProblem }, { status: 400 })
+    if (existing.status === 'draft' || existing.status === 'rejected') fields.status = 'pending'
+    else fields.under_review = true
+    const { data, error } = await supabaseAdmin.from('events').update(fields).eq('id', id).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ data })
   }
@@ -449,7 +504,7 @@ export async function PATCH(req: NextRequest) {
   const { data: event } = await supabaseAdmin.from('events').select('*').eq('id', id).maybeSingle()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
-  if (action === 'toggle_booking') {
+  if (action === 'toggle_booking') { if (!(await checkEventAccess(req, session, { eventId: id }, 'edit')).ok) return notFound()
     if (event.status !== 'active') return NextResponse.json({ error: 'Booking toggle only applies to active events' }, { status: 400 })
     const { data, error } = await supabaseAdmin.from('events')
       .update({ booking_open: !event.booking_open, updated_at: new Date().toISOString() }).eq('id', id).select().single()
@@ -469,14 +524,42 @@ export async function PATCH(req: NextRequest) {
     const wasFirstApproval = event.status === 'pending'
     const snapshot = event.last_approved_snapshot as any
     const nameChanged = !wasFirstApproval && snapshot && snapshot.name !== event.name
-    if (nameChanged) slug = await generateSlug(event.name, id)
-
-    const fields: any = {
-      status: 'active', is_approved: true, approved_by: session.user_id, approved_at: new Date().toISOString(),
-      under_review: false, slug, last_approved_snapshot: { ...event, slug },
-      updated_at: new Date().toISOString()
+    const forceBookingClosed = wasFirstApproval
+      if (nameChanged) {
+      slug = await generateSlug(event.name, id)
+      await supabaseAdmin.from('event_slug_redirects').insert({ old_slug: event.slug, event_id: id })
     }
-    if (wasFirstApproval) fields.booking_open = true
+
+        const fields: any = {
+      status: 'active', is_approved: true, approved_by: session.user_id, approved_at: new Date().toISOString(),
+      under_review: false, has_pending_edits: false, slug, updated_at: new Date().toISOString()
+    }
+    if (wasFirstApproval) fields.booking_open = false
+  
+    const bundle = await buildEventBundle({ ...event, ...fields })
+    fields.last_approved_snapshot = bundle
+
+    const { data, error } = await supabaseAdmin.from('events').update(fields).eq('id', id).select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await sendEventDecisionEmail(data, 'approved', !wasFirstApproval)
+    return NextResponse.json({ data })
+  }
+
+    if (action === 'toggle_publish') {
+    if (!(await hasEventRight(req, session, 'can_approve'))) {
+      return NextResponse.json({ error: 'You do not have permission to change this event\'s status.' }, { status: 403 })
+    }
+    if (event.status !== 'active') {
+      return NextResponse.json({ error: 'This event is not currently active' }, { status: 400 })
+    }
+    const { mode } = body
+    const fields: any = { updated_at: new Date().toISOString() }
+    if (mode === 'publish') { fields.published = true; fields.published_by = session.user_id; fields.published_at = new Date().toISOString() }
+    else if (mode === 'publish_and_book') { fields.published = true; fields.booking_open = true; fields.published_by = session.user_id; fields.published_at = new Date().toISOString() }
+    else if (mode === 'unlist') fields.published = false
+    else if (mode === 'pause_booking') fields.booking_open = false
+    else if (mode === 'resume_booking') fields.booking_open = true
+    else return NextResponse.json({ error: 'Unknown mode' }, { status: 400 })
 
     const { data, error } = await supabaseAdmin.from('events').update(fields).eq('id', id).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -501,6 +584,7 @@ export async function PATCH(req: NextRequest) {
       module_code: 'event', record_id: id, action_type: isCorrection ? 'reject_correction' : 'reject',
       reason_id: reason_id || null, note: reason_note || null, created_by: session.user_id
     })
+    await sendEventDecisionEmail(data, 'rejected', isCorrection, reason_id, reason_note)
     return NextResponse.json({ data })
   }
 
@@ -513,7 +597,7 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  const { data: event } = await supabaseAdmin.from('events').select('status').eq('id', id).maybeSingle()
+  const { data: event } = await supabaseAdmin.from('events').select('status').eq('id', id).maybeSingle(); if (event && !(await checkEventAccess(req, session, { eventId: id }, 'edit')).ok) return notFound()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   if (!['draft', 'pending'].includes(event.status)) {

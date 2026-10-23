@@ -1,7 +1,9 @@
 // THIS FILE GOES IN: app/biz/events/eventvenue/create-venue/api/route.ts (NEW FILE)
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getSession } from '@/lib/auth'
+import { getSession } from '@/lib/auth'; 
+import { getActiveEntityContext } from '@/lib/activeCompanyContext'; 
+import { checkEntityAccess } from '@/lib/eventAccess'
 
 const ROOT_COMPANY_ID = '11111111-1111-1111-1111-111111111111'
 
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
+  const ctx = await getActiveEntityContext(req.cookies); if (!ctx.entityId || !(await checkEntityAccess(req, session, ctx.entityId, 'edit'))) return NextResponse.json({ error: 'Not allowed' }, { status: 403 }); const body = await req.json()
   const companyId = await matchVenueReportingOffice(body.city_id || null, body.state_id || null, body.country_id || null)
   const processId = await nextVenueProcessId()
 

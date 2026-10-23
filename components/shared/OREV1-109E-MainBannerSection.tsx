@@ -7,8 +7,7 @@ type Props = { banners: Media[]; bannerError: string; theme: any; onSetDefault: 
 export default function OREV1109EMainBannerSection({ banners, bannerError, theme, onSetDefault, onDelete, onFileSelect }: Props) {
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-1" style={{ color: theme?.color_text_primary || '#111827' }}>Main Banner <span className="text-red-500">*</span></h3>
-      <p className="text-xs mb-3" style={{ color: theme?.color_text_muted || '#9ca3af' }}>Up to 5, landscape 2:1 ratio, max 2MB. You'll be able to adjust the crop after upload. One must be set as Default (used in ticket emails — must be an image).</p>
+      <h3 className="text-lg font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Main Banner <span className="text-red-500">*</span> <span className="font-normal text-xs" style={{ color: theme?.color_text_muted || '#9ca3af' }}>| landscape 2:1 | up to 2MB | Max 5 Images</span></h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
         {banners.map(b => (
           <div key={b.id} className="relative rounded-xl overflow-hidden border border-gray-100 aspect-[2/1] bg-gray-50">

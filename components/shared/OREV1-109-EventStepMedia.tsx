@@ -21,6 +21,7 @@ export default function OREV1109EventStepMedia({ event, locked, onSaved, onBack,
   const [gallery, setGallery] = useState<Media[]>([])
   const [bannerError, setBannerError] = useState('')
   const [cropTarget, setCropTarget] = useState<{ file: File; section: 'banner' | 'gallery'; orientation?: 'horizontal' | 'vertical' } | null>(null)
+  const [hasChanges, setHasChanges] = useState(false)
   const loadMedia = () => {
     if (!event?.id) return
     fetch(`${MEDIA_API}?event_id=${event.id}`).then(r => r.json()).then(j => {
@@ -39,13 +40,9 @@ export default function OREV1109EventStepMedia({ event, locked, onSaved, onBack,
     const json = await res.json()
     if (!res.ok) { toast.error(json.error || 'Upload failed'); return }
     toast.success(section === 'banner' ? 'Banner uploaded' : 'Added to gallery')
-    setBannerError('')
-    loadMedia()
+    setBannerError(''); setHasChanges(true); loadMedia()
   }
-  const handleCropSave = (file: File) => {
-    if (!cropTarget) return
-    handleUpload(file, cropTarget.section, cropTarget.orientation); setCropTarget(null)
-  }
+  const handleCropSave = (file: File) => { if (!cropTarget) return; handleUpload(file, cropTarget.section, cropTarget.orientation); setCropTarget(null) }
   const handleCropCancel = () => setCropTarget(null)
   const handleBannerFileSelect = (f: File) => { if (f.type.startsWith('image/')) setCropTarget({ file: f, section: 'banner' }); else handleUpload(f, 'banner') }
   const handleGalleryFileSelect = (f: File) => {
@@ -58,16 +55,19 @@ export default function OREV1109EventStepMedia({ event, locked, onSaved, onBack,
     const res = await fetch(MEDIA_API, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'set_default' }) })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error || 'Failed'); return }
-    loadMedia()
+    setHasChanges(true); loadMedia()
   }
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this item?')) return
     const res = await fetch(MEDIA_API, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error || 'Failed'); return }
-    loadMedia()
+    setHasChanges(true); loadMedia()
   }
-  const handleCaptionChange = async (id: string, val: string) => { await fetch(MEDIA_API, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'update_caption', caption: val }) }) }
+  const handleCaptionChange = async (id: string, val: string) => {
+    await fetch(MEDIA_API, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'update_caption', caption: val }) })
+    setHasChanges(true)
+  }
   const handleDragEnd = async (e: DragEndEvent) => {
     const { active, over } = e
     if (!over || active.id === over.id) return
@@ -75,27 +75,24 @@ export default function OREV1109EventStepMedia({ event, locked, onSaved, onBack,
     setGallery(reordered)
     const payload = reordered.map((m, idx) => ({ id: m.id, sort_order: idx }))
     await fetch(MEDIA_API, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reorder', id: payload[0].id, items: payload }) })
+    setHasChanges(true)
   }
   const handleContinue = async () => {
     if (banners.length === 0) { setBannerError('At least one banner is required, with one set as Default.'); return }
     if (!banners.some(b => b.is_default_banner)) { setBannerError('Please set one banner as Default.'); return }
-    toast.success(event?.status === 'active' ? 'Changes sent for re-verification' : 'Saved'); onSaved(event as EventDraft)
+    if (hasChanges) toast.success(event?.status === 'active' ? 'Saved to draft — submit for approval to go live' : 'Saved')
+    onSaved(event as EventDraft)
   }
   const handleAdminNext = () => onSaved(event as EventDraft)
-  const cropAspect = cropTarget?.section === 'gallery' ? (cropTarget.orientation === 'vertical' ? 1 / 1.5 : 2) : 2
-  const cropLabel = cropTarget?.section === 'gallery' ? `Adjust gallery photo crop (${cropTarget.orientation === 'vertical' ? '1:1.5' : '2:1'} ratio, auto-detected)` : 'Adjust banner crop (2:1 ratio)'
+  const cropAspect = cropTarget?.section === 'gallery' ? (cropTarget.orientation === 'vertical' ? 1 / 1.5 : 2) : 2;   const cropLabel = cropTarget?.section === 'gallery' ? `Adjust gallery photo crop (${cropTarget.orientation === 'vertical' ? '1:1.5' : '2:1'} ratio, auto-detected)` : 'Adjust banner crop (2:1 ratio)'
   return (
     <div className="flex flex-col gap-8 max-w-3xl">
       {cropTarget && <OREV1109BBannerCropUpload file={cropTarget.file} onSave={handleCropSave} onCancel={handleCropCancel} theme={theme} aspect={cropAspect} label={cropLabel} requireConsent={cropTarget.section === 'gallery'} />}
-      {locked && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-xs text-yellow-700">
-          This event is awaiting Admin review and can't be edited right now.
-        </div>
-      )}
+      {locked && <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-xs text-yellow-700">This event is awaiting Admin review and can't be edited right now.</div>}
       <fieldset disabled={locked} className="flex flex-col gap-8 disabled:opacity-60">
         <OREV1109EMainBannerSection banners={banners} bannerError={bannerError} theme={theme} onSetDefault={handleSetDefault} onDelete={handleDelete} onFileSelect={handleBannerFileSelect} />
         <OREV1109FGallerySection gallery={gallery} theme={theme} radius={radius} onDragEnd={handleDragEnd} onDelete={handleDelete} onCaptionChange={handleCaptionChange} onFileSelect={handleGalleryFileSelect} />
-        {event?.id && <OREV1109CSponsorsSocialLinks eventId={event.id} locked={locked} theme={theme} />}
+        {event?.id && <OREV1109CSponsorsSocialLinks eventId={event.id} locked={locked} theme={theme} onChange={() => setHasChanges(true)} />}
       </fieldset>
       <OREV1109GMediaStepFooter locked={locked} onBack={onBack} onClose={onClose} onContinue={locked ? handleAdminNext : handleContinue} theme={theme} />
     </div>

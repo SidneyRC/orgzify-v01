@@ -2,7 +2,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
-import toast from 'react-hot-toast'
+import toast from 'react-hot-toast'; 
+import { bookingOptionsProblem, bookingToggleBlock, bookingUrlFormatProblem } from '@/lib/bookingMethodRules'
 import OREV1113BBookingQRUPI from '@/components/shared/OREV1-113B-BookingMethodQRUPI'
 import OREV1113CBookingBankURL from '@/components/shared/OREV1-113C-BookingMethodBankURL'
 
@@ -20,6 +21,7 @@ export default function OREV1113EventStepBookingMethod({ eventId, locked, onCont
   const [upi, setUpi] = useState<any[]>([])
   const [venues, setVenues] = useState<any[]>([])
   const [timeUrls, setTimeUrls] = useState<Record<string, string>>({})
+  const [original, setOriginal] = useState<{ fields: any; upi: any[]; timeUrls: Record<string, string> }>({ fields: {}, upi: [], timeUrls: {} })
 
   useEffect(() => {
     const load = async () => {
@@ -33,12 +35,13 @@ export default function OREV1113EventStepBookingMethod({ eventId, locked, onCont
         urls[t.id] = t.event_venue_time_urls?.booking_url || ''
       })))
       setTimeUrls(urls)
+      setOriginal({ fields: j.data || fields, upi: j.upi || [], timeUrls: urls })
       setLoading(false)
     }
     load()
   }, [eventId])
 
-  const toggle = (key: string) => { if (!locked) setFields((f: any) => ({ ...f, [key]: !f[key] })) }
+  const toggle = (key: string) => { if (locked) return; const block = bookingToggleBlock(fields, key); if (block) { toast.error(block); return }; setFields((f: any) => ({ ...f, [key]: !f[key] })) }
 
   const canContinue = () => {
     if (fields.pg_enabled) return true
@@ -54,13 +57,18 @@ export default function OREV1113EventStepBookingMethod({ eventId, locked, onCont
     return fields.qr_enabled || fields.upi_enabled || fields.bank_enabled || fields.url_enabled
   }
 
-  const handleContinue = async () => {
+    const handleContinue = async () => { const optionProblem = bookingOptionsProblem(fields); if (optionProblem) { toast.error(optionProblem); return }; const urlProblem = bookingUrlFormatProblem(fields, Object.values(timeUrls)); if (urlProblem) { toast.error(urlProblem); return }
+    const changed = JSON.stringify(fields) !== JSON.stringify(original.fields)
+      || JSON.stringify(upi) !== JSON.stringify(original.upi)
+      || JSON.stringify(timeUrls) !== JSON.stringify(original.timeUrls)
+    if (!changed) { onContinue(); return }
     setSaving(true)
     const payload = Object.entries(timeUrls).filter(([, v]) => v).map(([id, url]) => ({ event_venue_time_id: id, booking_url: url }))
     const res = await fetch('/biz/events/eventvenue/bookingmethod/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event_id: eventId, fields, upi, timeUrls: payload }) })
     setSaving(false)
     if (!res.ok) { toast.error('Failed to save Booking Method'); return }
     toast.success('Booking Method saved')
+    setOriginal({ fields, upi, timeUrls })
     onContinue()
   }
 

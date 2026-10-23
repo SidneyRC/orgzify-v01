@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
 import OREV1127EventPaymentModal from '@/components/shared/OREV1-127-EventPaymentModal'
-import OREV1141SlotAccordion from '@/components/shared/OREV1-141-SlotAccordion'
+import OREV1141SlotAccordion from '@/components/shared/OREV1-141-SlotAccordion'; 
+import { handleBookTap } from '@/lib/bookNowActions'; 
+import OREV1158RegisterAttendanceLink from '@/components/shared/OREV1-158-RegisterAttendanceLink'
 
 const Icon = ({ d, color }: { d: string; color: string }) => <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d={d} /></svg>
 const ICONS = {
@@ -14,7 +16,7 @@ const ICONS = {
   users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
 }
 
-export default function OREV1126EventBookingBox({ event, venues, ticketsBySlot, payment, selectedSlotId, onSelectSlot, hideBookButton, interested, count, onToggleInterested }: any) {
+export default function OREV1126EventBookingBox({ event, venues, ticketsBySlot, payment, selectedSlotId, onSelectSlot, hideBookButton, interested, count, onToggleInterested, isLoggedIn }: any) {
   const { theme } = useTheme()
   const [showPayment, setShowPayment] = useState(false)
   const radius = theme?.global_border_radius || '12px'
@@ -39,8 +41,15 @@ export default function OREV1126EventBookingBox({ event, venues, ticketsBySlot, 
   const durationLabel = hrs > 0 ? (mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`) : `${mins} min`
 
   const hasAnyPaymentMethod = !!payment && (payment.pg_enabled || payment.upi_enabled || payment.qr_enabled || payment.bank_enabled || payment.url_enabled)
-  const bookingDisabled = !event.published || !hasAnyPaymentMethod
-  const hasFastFilling = event.hasFastFilling
+  const selectedSlotStatus = event.slotStatusById?.[selectedSlotId]
+  const slotLocked = !!selectedSlotStatus && (selectedSlotStatus.status === 'past' || selectedSlotStatus.locked)
+  const slotTickets = ticketsBySlot?.[selectedSlotId] || []
+  const slotSoldOut = slotTickets.length > 0 && slotTickets.every((t: any) => t.soldOut)
+  const notPublished = !event.published || !hasAnyPaymentMethod
+  const bookingDisabled = notPublished || !event.booking_open || slotLocked || slotSoldOut
+  const disabledLabel = notPublished ? 'Not Published' : (!event.booking_open || slotLocked) ? 'Booking Closed' : 'Sold out'
+
+  const noSessions = !!event.noSessionsLeft
 
   return (
     <div className="lg:sticky lg:top-20 h-fit p-4 flex flex-col gap-3" style={{ backgroundColor: theme?.color_surface || '#fff', border: cardBorder, borderRadius: radius }}>
@@ -52,32 +61,31 @@ export default function OREV1126EventBookingBox({ event, venues, ticketsBySlot, 
       </div>
 
       <div className="pt-3" style={divider}>
-        <OREV1141SlotAccordion theme={theme} allSlots={allSlots} upcomingSlotIds={upcomingSlotIds} slotStatusById={event.slotStatusById || {}} ticketsBySlot={ticketsBySlot} selectedSlotId={selectedSlotId} onSelectSlot={onSelectSlot} />
+        {noSessions ? <div className="text-base font-semibold" style={strong}>Booking closed</div> : <OREV1141SlotAccordion theme={theme} allSlots={allSlots} upcomingSlotIds={upcomingSlotIds} slotStatusById={event.slotStatusById || {}} ticketsBySlot={ticketsBySlot} selectedSlotId={selectedSlotId} onSelectSlot={onSelectSlot} />}
       </div>
 
       <div className="pt-3 flex justify-between items-center" style={divider}>
-        <span className="text-sm flex items-center gap-1.5" style={secondary}><Icon d={ICONS.users} color={theme?.color_text_muted || '#9ca3af'} />{count} interested</span>
+        <span className="text-base flex items-center gap-1.5" style={secondary}><Icon d={ICONS.users} color={theme?.color_text_muted || '#9ca3af'} />{count} interested</span>
                 <button onClick={onToggleInterested} className="text-base font-bold px-4 py-2.5 rounded-full" style={{ backgroundColor: interested ? (theme?.badge_success_bg || '#eff6ff') : 'transparent', border: '2px solid ' + (theme?.link_color || '#2563eb'), color: theme?.link_color || '#2563eb' }}>{interested ? '✓ Interested' : "I'm interested"}</button>
       </div>
 
-      {!hideBookButton && (
+      {!hideBookButton && !noSessions && (
         <div className="pt-3 flex items-center justify-between gap-3" style={divider}>
           <div className="text-left">
             <div className="text-lg font-bold" style={strong}>{event.lowestActivePrice === 0 ? 'Free' : event.lowestActivePrice != null ? '₹' + event.lowestActivePrice + ' onwards' : '—'}</div>
-            {hasFastFilling && <div className="text-xs font-semibold mt-0.5" style={{ color: '#c0392b' }}>Fast filling</div>}
           </div>
-          <button onClick={() => !bookingDisabled && setShowPayment(true)} disabled={bookingDisabled} className="font-bold shrink-0"
+          <button onClick={() => !bookingDisabled && (handleBookTap(event, !!isLoggedIn, selectedSlotId) || setShowPayment(true))} disabled={bookingDisabled} className="font-bold shrink-0"
             style={bookingDisabled
-              ? { backgroundColor: '#e5e7eb', color: '#9ca3af', borderRadius: theme?.btn_border_radius || radius, cursor: 'not-allowed', height: hasFastFilling ? '52px' : '46px', width: '110px' }
-              : { backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: theme?.btn_border_radius || radius, height: hasFastFilling ? '52px' : '46px', width: '110px' }}>
-            {bookingDisabled ? 'Not open' : 'Book Now'}
+              ? { backgroundColor: '#e5e7eb', color: '#9ca3af', borderRadius: theme?.btn_border_radius || radius, cursor: 'not-allowed', height: '46px', width: '110px' }
+              : { backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: theme?.btn_border_radius || radius, height: '46px', width: '110px' }}>
+            {bookingDisabled ? disabledLabel : 'Book Now'}
           </button>
         </div>
       )}
 
-      {pastSlots.length > 0 && (
+      <OREV1158RegisterAttendanceLink theme={theme} />{pastSlots.length > 0 && (
         <div className="pt-3" style={divider}>
-          <div className="text-xs mb-2" style={muted}>Past sessions</div>
+          <div className="text-sm mb-2" style={muted}>Past sessions</div>
           <div className="flex flex-col gap-1.5">
             {pastSlots.map((s: any) => (
               <div key={s.id} className="flex justify-between text-sm" style={muted}><span>{s.venue.external_name}</span><span>{fmtDate(s.date)} · {fmtTime(s.time)}</span></div>
@@ -86,7 +94,7 @@ export default function OREV1126EventBookingBox({ event, venues, ticketsBySlot, 
         </div>
       )}
 
-      {showPayment && !bookingDisabled && <OREV1127EventPaymentModal payment={payment} onClose={() => setShowPayment(false)} />}
+      {showPayment && !bookingDisabled && <OREV1127EventPaymentModal event={event} payment={payment} selectedSlotId={selectedSlotId} onClose={() => setShowPayment(false)} />}
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
-import { sendInviteNotification } from '@/lib/sendInvite';
+import { sendInviteNotification } from '@/lib/sendInvite'; import { nextZyNumber } from '@/lib/nextZyNumber';
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
 
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     // Generate ZY ID
     const { count } = await supabase
       .from('users').select('*', { count: 'exact', head: true });
-    const zyNum = String((count || 0) + 1).padStart(3, '0');
+    const zyNum = String(await nextZyNumber()).padStart(3, '0');
     const zy_id = `ZY${zyNum}`;
 
     const password_hash = await bcrypt.hash(password, 10);

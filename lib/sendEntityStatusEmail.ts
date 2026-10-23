@@ -2,7 +2,7 @@
 import { SendMailClient } from 'zeptomail'
 import { entityStatusEmail } from '@/lib/emails/entityStatusEmail'
 
-export type EntityEmailType = 'received' | 'approved' | 'rejected' | 'correction' | 'suspended' | 'blocked' | 'reactivated' | 'complete_registration'
+export type EntityEmailType = 'received' | 'approved' | 'rejected' | 'correction' | 'suspended' | 'blocked' | 'reactivated' | 'complete_registration' | 'event_approved' | 'event_correction_approved' | 'event_rejected' | 'event_correction_rejected'
 
 const SUBJECTS: Record<EntityEmailType, string> = {
   received: "We've Received Your Registration - Orgzify",
@@ -13,6 +13,10 @@ const SUBJECTS: Record<EntityEmailType, string> = {
   blocked: 'Your Account Has Been Blocked - Orgzify',
   reactivated: 'Your Account Has Been Reactivated - Orgzify',
   complete_registration: 'Action Needed - Complete Your Registration - Orgzify',
+  event_approved: 'Your Event is Approved - Orgzify',
+  event_correction_approved: 'Your Event Changes are Approved - Orgzify',
+  event_rejected: 'Update on Your Event - Orgzify',
+  event_correction_rejected: 'Update on Your Event Changes - Orgzify',
 }
 
 const CONTENT: Record<EntityEmailType, { heading: string; message: string }> = {
@@ -24,6 +28,10 @@ const CONTENT: Record<EntityEmailType, { heading: string; message: string }> = {
   blocked: { heading: 'Your account has been blocked', message: 'your Business Profile has been blocked.' },
   reactivated: { heading: 'Your account has been reactivated', message: 'your Business Profile is active again on Orgzify.' },
   complete_registration: { heading: 'Please complete your registration', message: 'we were unable to auto-match your Reporting Office. Please continue your registration to finish setup.' },
+  event_approved: { heading: 'Your event is approved', message: 'your event has been approved. Open it in Events to publish it.' },
+  event_correction_approved: { heading: 'Your event changes are approved', message: 'the changes you submitted are now live on your event.' },
+  event_rejected: { heading: 'Your event was not approved', message: "after review, we are unable to approve your event yet. Please see the details below." },
+  event_correction_rejected: { heading: 'Your event changes were not approved', message: 'your event stays live with its earlier details. Please see the details below.' },
 }
 
 export async function sendEntityStatusEmail({ to, name, type, reason, buttonLabel, buttonUrl, supportEmail }: {

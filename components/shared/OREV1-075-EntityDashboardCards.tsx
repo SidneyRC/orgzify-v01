@@ -17,7 +17,7 @@ export default function EntityDashboardCards({ processId, entitySlug, moduleAcce
 
   const cards: { key: string; Icon: LucideIcon; title: string; desc: string; href?: string; show: boolean }[] = [
     { key: "profile", Icon: User, title: "Profile", desc: "View your submitted registration details", href: `/biz/register?ref=${processId}&mode=view`, show: true },
-    { key: "pages", Icon: LayoutTemplate, title: "Pages", desc: "Set up your front-end profile page", show: moduleAccess.pages },
+    { key: "pages", Icon: LayoutTemplate, title: "Pages", desc: "Set up your front-end profile page", href: `/biz/${entitySlug}/pages`, show: moduleAccess.pages },
     { key: "academy", Icon: GraduationCap, title: "Academy", desc: "Academy controls", show: moduleAccess.academy },
     { key: "events", Icon: CalendarDays, title: "Events", desc: "Events creation and setup", href: `/biz/${entitySlug}/events`, show: moduleAccess.events },
   ].filter(c => c.show);

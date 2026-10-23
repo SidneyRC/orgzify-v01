@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
-import Footer from "@/components/shared/OREV1-011-Footer";
+import Footer from "@/components/shared/OREV1-011-Footer"; import { safeNext } from "@/lib/safeNext";
 
 function validatePassword(pw: string): string[] {
   const e: string[] = [];
@@ -68,7 +68,7 @@ export default function RegisterStep3({ title, fullName, email, inviteToken }: P
     if (!res.ok) { setError(data.error || 'Unable to create an account!'); setLoading(false); return; }
     setLoading(false);
     toast.success("Account created successfully!");
-    window.location.href = data.is_complete ? "/profiles" : "/profile/edit"; // ✅ Full reload so navbar picks up new cookie
+    const back = safeNext(searchParams.get("next")); window.location.href = back ? (data.is_complete ? back : "/profile/edit?next=" + encodeURIComponent(back)) : (data.is_complete ? "/profiles" : "/profile/edit");// ✅ Full reload so navbar picks up new cookie
   };
 
   return (

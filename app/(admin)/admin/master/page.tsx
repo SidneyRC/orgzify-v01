@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import Link from "next/link";
+import MasterCardGrid from "@/components/admin/OREV1-144-MasterCardGrid";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getServerSession } from "@/lib/auth";
 import { getDownlineIds } from "@/lib/companyScope";
@@ -19,14 +19,16 @@ async function getTheme() {
 }
 
 async function getCounts() {
-  const [{ count: l1 }, { count: l2 }, { count: tags }, { count: sponsors }, { count: artists }] = await Promise.all([
+  const [{ count: l1 }, { count: l2 }, { count: tags }, { count: sponsors }, { count: artists }, { count: evL1 }, { count: evL2 }] = await Promise.all([
     supabaseAdmin.from("categories").select("*", { count: "exact", head: true }).eq("level", 1).eq("status", "active"),
     supabaseAdmin.from("categories").select("*", { count: "exact", head: true }).eq("level", 2).eq("status", "active"),
     supabaseAdmin.from("event_tags_format").select("*", { count: "exact", head: true }).eq("status", "active"),
         supabaseAdmin.from("sponsors").select("*", { count: "exact", head: true }).eq("status", "approved").eq("is_enabled", true),
     supabaseAdmin.from("artists").select("*", { count: "exact", head: true }).eq("status", "active"),
+    supabaseAdmin.from("event_categories").select("*", { count: "exact", head: true }).eq("level", 1).eq("status", "active"),
+    supabaseAdmin.from("event_categories").select("*", { count: "exact", head: true }).eq("level", 2).eq("status", "active"),
   ]);
-  return { l1: l1 ?? 0, l2: l2 ?? 0, tags: tags ?? 0, sponsors: sponsors ?? 0, artists: artists ?? 0 };
+  return { l1: l1 ?? 0, l2: l2 ?? 0, tags: tags ?? 0, sponsors: sponsors ?? 0, artists: artists ?? 0, evL1: evL1 ?? 0, evL2: evL2 ?? 0 };
 }
 
 // Active venues, scoped to the logged-in user's company + downline via
@@ -60,9 +62,14 @@ export default async function MasterPage() {
       title: "Categories", description: "Category & Sub-category master used across Events and Academy",
       href: "/admin/master/categories", meta: `Category : ${counts.l1}  |  Sub Category : ${counts.l2}`, icon: "🗂️",
     },
+    
     {
       title: "Event Tags Format", description: "Format tags used across Events (e.g. Kids, Competition, Workshop)",
       href: "/admin/master/event-tags-format", meta: `Tag : ${counts.tags}`, icon: "🏷️",
+    },
+        {
+      title: "Event Categories", description: "Category & Sub-category master used in the Event Builder",
+      href: "/admin/master/event-categories", meta: `Category : ${counts.evL1}  |  Sub Category : ${counts.evL2}`, icon: "📋",
     },
         {
       title: "Venue", description: "Physical locations used for Events and future modules",
@@ -80,23 +87,11 @@ export default async function MasterPage() {
 
   return (
     <div className="p-6 pr-8" style={{ backgroundColor: theme?.page_bg }}>
-      <div className="mb-8">
+        <div className="mb-8">
         <h1 className="text-2xl font-semibold" style={{ color: textPrimary }}>Master</h1>
         <p className="text-sm mt-1" style={{ color: textMuted }}>Platform-wide master data</p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {cards.map((card) => (
-          <Link key={card.title} href={card.href} style={{ borderRadius: radius }}
-            className="bg-white border border-gray-100 p-7 hover:shadow-lg transition-shadow flex flex-col gap-4">
-            <span className="text-4xl">{card.icon}</span>
-            <div>
-              <p className="text-base font-semibold" style={{ color: textPrimary }}>{card.title}</p>
-              <p className="text-sm mt-0.5" style={{ color: textMuted }}>{card.description}</p>
-            </div>
-            <p className="text-xs border-t border-gray-50 pt-2" style={{ color: textMuted }}>{card.meta}</p>
-          </Link>
-        ))}
-      </div>
+      <MasterCardGrid cards={cards} radius={radius} textPrimary={textPrimary} textMuted={textMuted} />
     </div>
   );
 }

@@ -1,35 +1,30 @@
-// THIS FILE GOES IN: components/shared/OREV1-117B-ArtistSearchAdd.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-117B-ArtistSearchAdd.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 import OREV1117ArtistCreateForm from '@/components/shared/OREV1-117-ArtistCreateForm'
 const ARTISTS_API = '/biz/events/artists/api'
 type Artist = { id: string; name: string; photo_url: string | null }
-type Props = { locked: boolean; theme: any; onAssign: (artist: Artist) => void }
-
-export default function OREV1117BArtistSearchAdd({ locked, theme, onAssign }: Props) {
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState<Artist[]>([])
-  const [creating, setCreating] = useState(false)
-  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null)
+type Props = { locked: boolean; theme: any; onAssign: (artist: Artist) => void; existingArtists: { name: string; photo_url: string | null }[] }
+export default function OREV1117BArtistSearchAdd({ locked, theme, onAssign, existingArtists }: Props) {
+  const [q, setQ] = useState(''); const [results, setResults] = useState<Artist[]>([]); const [creating, setCreating] = useState(false)
+  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null); const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; photo_url: string | null } | null>(null)
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   useEffect(() => {
     if (!zoomedUrl) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setZoomedUrl(null) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey)
   }, [zoomedUrl])
-
   const runSearch = async (val: string) => {
     setQ(val)
     if (!val.trim()) { setResults([]); return }
-    const res = await fetch(`${ARTISTS_API}?search=${encodeURIComponent(val)}`)
-    const json = await res.json()
-    setResults(json.data || [])
+    const res = await fetch(`${ARTISTS_API}?search=${encodeURIComponent(val)}`); const json = await res.json(); setResults(json.data || [])
   }
-
-  const handlePick = (a: Artist) => { onAssign(a); setQ(''); setResults([]) }
-
+  const handlePick = (a: Artist) => {
+    const dup = existingArtists.find(ea => ea.name.trim().toLowerCase() === a.name.trim().toLowerCase())
+    if (dup) { setDuplicateWarning(dup); setQ(''); setResults([]); return }
+    onAssign(a); setQ(''); setResults([])
+  }
   return (
     <div className="border border-gray-100 rounded-xl p-4">
       <label className="text-xs font-medium block mb-1" style={{ color: theme?.color_text_muted || '#9ca3af' }}>Search artist by name</label>
@@ -57,6 +52,15 @@ export default function OREV1117BArtistSearchAdd({ locked, theme, onAssign }: Pr
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setCreating(false)}>
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <OREV1117ArtistCreateForm theme={theme} onDone={() => setCreating(false)} />
+          </div>
+        </div>
+      )}
+      {duplicateWarning && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setDuplicateWarning(null)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm text-center" onClick={e => e.stopPropagation()}>
+            {duplicateWarning.photo_url ? <img src={duplicateWarning.photo_url} className="w-16 h-16 rounded-full object-cover mx-auto mb-3" /> : <span className="w-16 h-16 rounded-full bg-gray-100 mx-auto mb-3 flex items-center justify-center text-lg text-gray-400">{duplicateWarning.name[0]}</span>}
+            <p className="text-sm font-semibold text-gray-700 mb-3">{duplicateWarning.name} — already added to this event.</p>
+            <button type="button" onClick={() => setDuplicateWarning(null)} style={{ backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: radius }} className="px-6 py-2 text-sm">OK</button>
           </div>
         </div>
       )}

@@ -23,8 +23,9 @@ export default function OREV1115EReviewBookingMethodSection({ eventId, onEdit, t
   const [upi, setUpi] = useState<any[]>([])
   const [venues, setVenues] = useState<any[]>([])
   useEffect(() => {
-    fetch(`/biz/events/eventvenue/bookingmethod/api?event_id=${eventId}`).then(r => r.json())
+      fetch(`/biz/events/eventvenue/bookingmethod/api?event_id=${eventId}`).then(r => r.json())
       .then(j => { setMethod(j.data); setUpi(j.upi || []); setVenues(j.venues || []) })
+      .catch(() => {})
   }, [eventId])
   const headText = { color: theme?.color_text_primary || '#111827' }
   const mutedText = { color: theme?.color_text_muted || '#9ca3af' }

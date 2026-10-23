@@ -1,4 +1,4 @@
-// THIS FILE GOES IN: components/shared/OREV1-109C-SponsorsSocialLinks.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-109C-SponsorsSocialLinks.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
@@ -6,10 +6,10 @@ import OREV1109DSponsorSearchAdd from '@/components/shared/OREV1-109D-SponsorSea
 import OREV1117DArtistSection from '@/components/shared/OREV1-117D-ArtistSection'
 const SPONSORS_API = '/biz/events/sponsors/api'
 const LINKS_API = '/biz/events/sociallinks/api'
-const PLATFORMS = ['Facebook', 'Instagram', 'X', 'YouTube', 'Website', 'Other']
+import { LINK_PLATFORMS, MAX_LINKS, isAllowedPlatform, socialLinkProblem } from '@/lib/socialLinkRules'
 type EventSponsor = { id: string; sponsor_type: string; sponsors: { id: string; name: string; logo_url: string | null } }
 type SocialLink = { id: string; platform: string; url: string }
-type Props = { eventId: string; locked: boolean; theme: any }
+type Props = { eventId: string; locked: boolean; theme: any; onChange: () => void }
 
 function SponsorTile({ es, locked, onRemove, theme }: { es: EventSponsor; locked: boolean; onRemove: (id: string) => void; theme: any }) {
   return (
@@ -22,64 +22,64 @@ function SponsorTile({ es, locked, onRemove, theme }: { es: EventSponsor; locked
   )
 }
 
-export default function OREV1109CSponsorsSocialLinks({ eventId, locked, theme }: Props) {
+export default function OREV1109CSponsorsSocialLinks({ eventId, locked, theme, onChange }: Props) {
   const [sponsors, setSponsors] = useState<EventSponsor[]>([])
   const [links, setLinks] = useState<SocialLink[]>([])
-  const [platform, setPlatform] = useState('Facebook')
+  const [platform, setPlatform] = useState(LINK_PLATFORMS[0])
   const [url, setUrl] = useState('')
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
 
   const loadSponsors = () => fetch(`${SPONSORS_API}?event_id=${eventId}`).then(r => r.json()).then(j => setSponsors(j.data || []))
-  const loadLinks = () => fetch(`${LINKS_API}?event_id=${eventId}`).then(r => r.json()).then(j => setLinks(j.data || []))
+  const loadLinks = () => fetch(`${LINKS_API}?event_id=${eventId}`).then(r => r.json()).then(j => setLinks((j.data || []).filter((l: SocialLink) => isAllowedPlatform(l.platform))))
   useEffect(() => { if (eventId) { loadSponsors(); loadLinks() } }, [eventId])
 
   const handleAssign = async (sponsor: { id: string; name: string; logo_url: string | null }, sponsorType: string) => {
     const res = await fetch(SPONSORS_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'assign', event_id: eventId, sponsor_id: sponsor.id, sponsor_type: sponsorType }) })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error || 'Failed'); return }
-    toast.success('Sponsor added'); loadSponsors()
+    toast.success('Sponsor added'); onChange(); loadSponsors()
   }
-  const handleRemoveSponsor = async (id: string) => { await fetch(`${SPONSORS_API}?id=${id}`, { method: 'DELETE' }); loadSponsors() }
+  const handleRemoveSponsor = async (id: string) => { await fetch(`${SPONSORS_API}?id=${id}`, { method: 'DELETE' }); onChange(); loadSponsors() }
 
   const handleAddLink = async () => {
-    if (!url.trim()) return
+    if (!url.trim()) return; const problem = socialLinkProblem(platform, url.trim(), links.length); if (problem) { toast.error(problem); return }
     const res = await fetch(LINKS_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event_id: eventId, platform, url: url.trim() }) })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error || 'Failed'); return }
-    setUrl(''); loadLinks()
+    setUrl(''); onChange(); loadLinks()
   }
-  const handleRemoveLink = async (id: string) => { await fetch(`${LINKS_API}?id=${id}`, { method: 'DELETE' }); loadLinks() }
+  const handleRemoveLink = async (id: string) => { await fetch(`${LINKS_API}?id=${id}`, { method: 'DELETE' }); onChange(); loadLinks() }
 
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h3 className="text-sm font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Sponsors (optional)</h3>
+        <h3 className="text-lg font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Sponsors (optional)</h3>
         {sponsors.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {sponsors.map(es => <SponsorTile key={es.id} es={es} locked={locked} onRemove={handleRemoveSponsor} theme={theme} />)}
           </div>
         )}
-        {!locked && <OREV1109DSponsorSearchAdd locked={locked} theme={theme} onAssign={handleAssign} />}
+        {!locked && <OREV1109DSponsorSearchAdd locked={locked} theme={theme} onAssign={handleAssign} existingSponsors={sponsors.map(es => ({ ...es.sponsors, sponsor_type: es.sponsor_type }))} />}
       </div>
-      <OREV1117DArtistSection eventId={eventId} locked={locked} theme={theme} />
+      <OREV1117DArtistSection eventId={eventId} locked={locked} theme={theme} onChange={onChange} />
       <div>
-        <h3 className="text-sm font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Social Media Links (optional)</h3>
+        <h3 className="text-lg font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Social Media Links (optional)</h3>
         {links.length > 0 && (
           <div className="flex flex-col gap-2 mb-3">
             {links.map(l => (
               <div key={l.id} className="flex items-center gap-2 text-sm">
                 <span className="w-20 text-xs" style={{ color: theme?.color_text_muted || '#9ca3af' }}>{l.platform}</span>
-                <span className="flex-1 truncate text-gray-700">{l.url}</span>
+                <span className="flex-1 min-w-0 break-all text-gray-700">{l.url}</span>
                 {!locked && <button onClick={() => handleRemoveLink(l.id)} className="text-red-500 text-xs">✕</button>}
               </div>
             ))}
           </div>
         )}
-        {!locked && (
+        {!locked && links.length >= MAX_LINKS && <p className="text-sm" style={{ color: theme?.color_text_muted || '#9ca3af' }}>Maximum {MAX_LINKS} reached</p>}{!locked && links.length < MAX_LINKS && (
           <div className="flex gap-2">
             <select value={platform} onChange={e => setPlatform(e.target.value)} className="h-9 px-2 text-sm" style={inputStyle}>
-              {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+              {LINK_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." className="h-9 px-3 text-sm flex-1 focus:outline-none" style={inputStyle} />
             <button onClick={handleAddLink} style={{ backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: radius }} className="px-4 text-sm">+ Add</button>

@@ -1,16 +1,24 @@
-// THIS FILE GOES IN: app/biz/events/sponsors/api/route.ts (NEW FILE - THIS WAS MISSING)
+// THIS FILE GOES IN: app/biz/events/sponsors/api/route.ts (REPLACES existing file)
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { checkEventAccess } from '@/lib/eventAccess'
+import { checkEventEditable, flagPendingEditsIfActive } from '@/lib/eventEditFlag'
+
+const unauth = () => NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+// A refused person is told the event "cannot be found", never "not allowed".
+const noEvent = () => NextResponse.json({ error: 'Event not found' }, { status: 404 })
+const mayUse = async (req: NextRequest, session: any, eventId: string, mode: 'view' | 'edit') =>
+  (await checkEventAccess(req, session, { eventId }, mode)).ok
 
 export async function GET(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return unauth()
   const eventId = req.nextUrl.searchParams.get('event_id')
   const search = req.nextUrl.searchParams.get('search')
   const mine = req.nextUrl.searchParams.get('mine')
 
   if (mine === 'true') {
-    const session = await getSession(req)
-    if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     const { data, error } = await supabaseAdmin.from('sponsors').select('id, name, status, created_at')
       .eq('created_by', session.user_id).in('status', ['pending', 'rejected']).order('created_at', { ascending: false })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -31,6 +39,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!eventId) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
+  if (!(await mayUse(req, session, eventId, 'view'))) return noEvent()
   const { data, error } = await supabaseAdmin
     .from('event_sponsors')
     .select('id, sponsor_type, sponsors(id, name, logo_url)')
@@ -40,12 +49,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return unauth()
   const body = await req.json()
   const { action } = body
 
   if (action === 'create_sponsor') {
-    const session = await getSession(req)
-    if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     const { name, logo_url } = body
     if (!name || !logo_url) return NextResponse.json({ error: 'Name and logo are required' }, { status: 400 })
     const { data, error } = await supabaseAdmin
@@ -60,12 +69,21 @@ export async function POST(req: NextRequest) {
   if (action === 'assign') {
     const { event_id, sponsor_id, sponsor_type } = body
     if (!event_id || !sponsor_id || !sponsor_type) return NextResponse.json({ error: 'event_id, sponsor_id, sponsor_type required' }, { status: 400 })
+    if (!(await mayUse(req, session, event_id, 'edit'))) return noEvent()
+    // the sponsor must be approved, or created by this same person (a new sponsor waiting for approval)
+    const { data: sp } = await supabaseAdmin.from('sponsors').select('status, created_by').eq('id', sponsor_id).maybeSingle()
+    if (!sp || (sp.status !== 'approved' && sp.created_by !== session.user_id)) return NextResponse.json({ error: 'Sponsor not available' }, { status: 400 })
+    const { data: same } = await supabaseAdmin.from('event_sponsors').select('sponsor_type').eq('event_id', event_id).eq('sponsor_id', sponsor_id)
+    if ((same || []).some((r: any) => String(r.sponsor_type || '').trim().toLowerCase() === String(sponsor_type).trim().toLowerCase())) return NextResponse.json({ error: 'Already added with this sponsor type' }, { status: 409 })
+    const editable = await checkEventEditable(event_id)
+    if (editable.error) return NextResponse.json({ error: editable.error }, { status: 400 })
     const { data, error } = await supabaseAdmin
       .from('event_sponsors')
       .insert({ event_id, sponsor_id, sponsor_type })
       .select()
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await flagPendingEditsIfActive(event_id, editable.status!)
     return NextResponse.json({ data })
   }
 
@@ -73,9 +91,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return unauth()
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const { data: row } = await supabaseAdmin.from('event_sponsors').select('event_id').eq('id', id).maybeSingle()
+  if (!row || !(await mayUse(req, session, row.event_id, 'edit'))) return noEvent()
+  const editable = await checkEventEditable(row.event_id)
+  if (editable.error) return NextResponse.json({ error: editable.error }, { status: 400 })
   const { error } = await supabaseAdmin.from('event_sponsors').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await flagPendingEditsIfActive(row.event_id, editable.status!)
   return NextResponse.json({ data: true })
 }

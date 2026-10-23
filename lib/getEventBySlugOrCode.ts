@@ -1,181 +1,83 @@
-// lib/getEventBySlugOrCode.ts
-// Looks up an event by process_id (preview/share link, always visible)
-// or by slug (public/SEO link, subject to visibility rules).
-// Shapes the result to match what OREV1-130-EventPageClient.tsx expects.
+// THIS FILE GOES IN: lib/getEventBySlugOrCode.ts (REPLACES existing file)
+// Looks up an event by process_id or slug (single combined query — either
+// link format works identically for the public).
+//
+// accessType is 'preview' ONLY before an event's first approval — Super Admin
+// or the event's own owner can preview live/draft data pre-approval.
+// Once an event has been approved even once, accessType is ALWAYS 'public'
+// for everyone (owner and admin included) — no live preview after that,
+// per Sidney's confirmed rule (Aug 31 2026).
+//
+// On the public/approved path, Quantity, sold count, Fast selling and
+// Status are patched in live from event_ticket_assignments (see
+// eventBundleLiveOverrides.ts) — those four don't wait for approval.
+// Price and ticket identity stay frozen from the snapshot.
+// Session rules (hide sessions with no open tickets, sold-out flag, onwards
+// price, "no sessions left") are applied live too, by applyLiveSessionRules.
+//
+// The Host logo is also read live (entity_pages -> sponsors) and shown only
+// when that sponsor row is 'approved', so no event re-approval is needed.
+// The DEFAULT banner is read live too (liveDefaultBanner) — only among pictures
+// already in the approved copy, so changing the default needs no approval.
 
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { buildEventBundle } from '@/lib/buildEventBundle'
+import { buildLiveTicketOverrides, applyLiveSessionRules } from '@/lib/eventBundleLiveOverrides'; 
+import { withLiveTileLabels } from '@/lib/liveTileLabels'; 
+import { stripPrivateEventData } from '@/lib/stripPrivateEventData'
 
-export async function getEventBySlugOrCode(value: string) {
-  let accessType: 'preview' | 'public' = 'public'
-  let event: any = null
+async function getHostLogo(entityId: string): Promise<string> {
+  if (!entityId) return ''
+  const { data: page } = await supabaseAdmin.from('entity_pages').select('sponsor_id').eq('entity_id', entityId).maybeSingle()
+  if (!page?.sponsor_id) return ''
+  const { data: sponsor } = await supabaseAdmin.from('sponsors').select('logo_url, status').eq('id', page.sponsor_id).maybeSingle()
+  return sponsor?.status === 'approved' ? sponsor.logo_url || '' : ''
+}
 
-  const { data: byCode, error: codeErr } = await supabaseAdmin
-    .from('events')
-    .select('*')
-    .eq('process_id', value)
-    .maybeSingle()
-  if (codeErr) console.error('getEventBySlugOrCode (process_id lookup):', codeErr.message)
+async function liveDefaultBanner(eventId: string, banners: any[]) {
+  const { data } = await supabaseAdmin.from('event_media').select('id').eq('event_id', eventId).eq('section', 'banner').eq('is_default_banner', true).maybeSingle()
+  if (!data?.id || !(banners || []).some((b: any) => b.id === data.id)) return banners
+  return banners.map((b: any) => ({ ...b, is_default_banner: b.id === data.id }))
+}
 
-  if (byCode) {
-    event = byCode
-    accessType = 'preview'
-  } else {
-    const { data: bySlug, error: slugErr } = await supabaseAdmin
-      .from('events')
-      .select('*')
-      .eq('slug', value)
-      .maybeSingle()
-    if (slugErr) console.error('getEventBySlugOrCode (slug lookup):', slugErr.message)
-    event = bySlug
-  }
-
+export async function getEventBySlugOrCode(value: string, session: any = null) {
+  const { data: event, error } = await supabaseAdmin
+    .from('events').select('*').or(`process_id.eq.${value},slug.eq.${value}`).maybeSingle()
+  if (error) console.error('getEventBySlugOrCode:', error.message)
   if (!event) return null
 
-  const [{ data: category }, { data: subCategory }, { data: entity }] = await Promise.all([
-    event.category_id ? supabaseAdmin.from('event_categories').select('name').eq('id', event.category_id).maybeSingle() : Promise.resolve({ data: null }),
-    event.sub_category_id ? supabaseAdmin.from('event_categories').select('name').eq('id', event.sub_category_id).maybeSingle() : Promise.resolve({ data: null }),
-    event.entity_id ? supabaseAdmin.from('entities').select('display_name').eq('id', event.entity_id).maybeSingle() : Promise.resolve({ data: null }),
-  ])
-  event.categories = category
-  event.sub_categories = subCategory
-  event.entities = entity
-
-  const [{ data: media }, { data: eventVenues }, { data: ticketTypes }, { data: artistLinks }, { data: sponsorLinks }, { data: bookingMethods }, { data: upiRows }] = await Promise.all([
-    supabaseAdmin.from('event_media').select('*').eq('event_id', event.id).order('sort_order'),
-    supabaseAdmin.from('event_venues').select('id, venue_id, venues(external_name, line1, area, city_id, state_id, country_id)').eq('event_id', event.id),
-    supabaseAdmin.from('event_ticket_types').select('*').eq('event_id', event.id).eq('is_enabled', true).order('display_order'),
-    supabaseAdmin.from('event_artist_assignments').select('artist_id, artists(id, name, photo_url)').eq('event_id', event.id),
-    supabaseAdmin.from('event_sponsors').select('sponsor_id, sponsors(id, name, logo_url)').eq('event_id', event.id),
-    supabaseAdmin.from('event_booking_methods').select('*').eq('event_id', event.id).maybeSingle(),
-    supabaseAdmin.from('event_booking_upi').select('upi_id, display_name').eq('event_id', event.id),
-  ])
-
-    const venues = await buildVenues(eventVenues || [])
-    const { ticketsBySlot, nextUpcomingSlotId, upcomingSlotIds, pastSlotIds, lowestActivePrice, hasFastFilling, slotStatusById } = await buildTickets(venues, ticketTypes || [], event.event_duration_minutes || 0)
-
-  return {
-    ...event,
-    accessType,
-    category_name: event.categories?.name || '',
-    sub_category_name: event.sub_categories?.name || '',
-    organiser_name: event.entities?.display_name || '',
-    organiser_logo_url: '',
-    banners: (media || []).filter((m: any) => m.section === 'banner'),
-    gallery: (media || []).filter((m: any) => m.section === 'gallery'),
-    venues,
-    ticketsBySlot,
-    nextUpcomingSlotId,
-    upcomingSlotIds,
-    pastSlotIds,
-    lowestActivePrice,
-    hasFastFilling,
-    slotStatusById,
-    artists: (artistLinks || []).map((a: any) => a.artists).filter(Boolean),
-    sponsors: (sponsorLinks || []).map((s: any) => s.sponsors).filter(Boolean),
-    payment: buildPayment(bookingMethods, upiRows || []),
-    recommendations: [],
-  }
-}
-
-function buildPayment(bm: any, upiRows: any[]) {
-  if (!bm) return null
-  return {
-    upi_enabled: bm.upi_enabled || false,
-    upi: upiRows,
-    qr_enabled: bm.qr_enabled || false,
-    qr_image_url: bm.qr_image_url || '',
-    bank_enabled: bm.bank_enabled || false,
-    bank_account_name: bm.bank_account_name || '',
-    bank_account_number: bm.bank_account_number || '',
-    bank_name: bm.bank_name || '',
-    bank_ifsc_swift: bm.bank_ifsc_swift || '',
-    url_enabled: bm.url_enabled || false,
-    external_url: bm.external_url || '',
-  }
-}
-
-async function buildVenues(eventVenues: any[]) {
-  const venues = []
-  for (const ev of eventVenues) {
-    const { data: dates } = await supabaseAdmin
-      .from('event_venue_dates')
-      .select('id, event_date')
-      .eq('event_venue_id', ev.id)
-      .order('event_date')
-
-    const datesWithTimes = []
-    for (const d of dates || []) {
-      const { data: times } = await supabaseAdmin
-        .from('event_venue_times')
-        .select('id, start_time, end_time')
-        .eq('event_venue_date_id', d.id)
-        .order('start_time')
-      datesWithTimes.push({ ...d, times: times || [] })
-    }
-
-    venues.push({
-      id: ev.id,
-      external_name: ev.venues?.external_name || '',
-      line1: ev.venues?.line1 || '',
-      area: ev.venues?.area || '',
-      dates: datesWithTimes,
-    })
-  }
-  return venues
-}
-
-async function buildTickets(venues: any[], ticketTypes: any[], durationMin: number) {
-  const ticketsBySlot: Record<string, any[]> = {}
-  const allSlots: { id: string; date: string; time: string }[] = []
-
-  for (const v of venues) {
-    for (const d of v.dates) {
-      for (const t of d.times) {
-        allSlots.push({ id: t.id, date: d.event_date, time: t.start_time })
-        const { data: assigned } = await supabaseAdmin
-          .from('event_ticket_assignments')
-          .select('price, quantity, ticket_type_id')
-          .eq('event_venue_time_id', t.id)
-          .eq('is_enabled', true)
-        ticketsBySlot[t.id] = (assigned || [])
-          .map((a: any) => {
-            const tt = ticketTypes.find((x: any) => x.id === a.ticket_type_id)
-            if (!tt) return null
-            return { id: a.ticket_type_id, name: tt.name, price: a.price, fastFilling: !!tt.fast_selling_forced }
-          })
-          .filter(Boolean)
-      }
+  let accessType: 'preview' | 'public' = 'public'
+  if (session && !event.approved_at) {
+    if (session.is_super_admin) accessType = 'preview'
+    else {
+      const { data: entity } = await supabaseAdmin.from('entities').select('id').eq('id', event.entity_id).eq('user_id', session.user_id).maybeSingle()
+      if (entity) accessType = 'preview'
     }
   }
 
-  const GRACE_MIN = 10
-  const now = new Date()
-  const sorted = [...allSlots].sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime())
+  if (accessType === 'public' && event.approved_at && event.last_approved_snapshot) {
+    const snapshot = stripPrivateEventData(event.last_approved_snapshot)
+    const slotIds = Object.keys(snapshot.ticketsBySlot || {})
+    const [overrides, hostLogo] = await Promise.all([buildLiveTicketOverrides(slotIds), getHostLogo(event.entity_id)])
 
-  const slotStatusById: Record<string, { status: 'upcoming' | 'live' | 'past'; locked: boolean }> = {}
-  for (const s of sorted) {
-    const start = new Date(`${s.date}T${s.time}`)
-    const end = new Date(start.getTime() + durationMin * 60000)
-    const graceEnd = new Date(start.getTime() + GRACE_MIN * 60000)
-    let status: 'upcoming' | 'live' | 'past' = 'upcoming'
-    if (now >= end) status = 'past'
-    else if (now >= start) status = 'live'
-    const locked = status === 'live' && now >= graceEnd
-    slotStatusById[s.id] = { status, locked }
-  }
+    const liveTickets: Record<string, any[]> = {}
+    for (const slotId of slotIds) {
+      liveTickets[slotId] = (snapshot.ticketsBySlot[slotId] || [])
+        .map((t: any) => {
+          const live = overrides[`${slotId}_${t.id}`]
+          if (!live) return t
+          return { ...t, quantity: live.quantity, soldCount: live.soldCount, fastFilling: live.fastFilling, isEnabled: live.isEnabled }
+        })
+        .filter((t: any) => t.isEnabled !== false)
+    }
+    const rules = applyLiveSessionRules(snapshot, liveTickets)
 
-  const upcomingSlotIds = sorted.filter(s => slotStatusById[s.id].status !== 'past').map(s => s.id)
-  const pastSlotIds = sorted.filter(s => slotStatusById[s.id].status === 'past').map(s => s.id)
-  const nextUpcomingSlotId = upcomingSlotIds.find(id => !slotStatusById[id].locked) || upcomingSlotIds[0] || sorted[0]?.id || null
-
-  let lowestActivePrice: number | null = null
-  let hasFastFilling = false
-  for (const slotId of upcomingSlotIds) {
-    for (const t of ticketsBySlot[slotId] || []) {
-      if (lowestActivePrice === null || t.price < lowestActivePrice) lowestActivePrice = t.price
-      if (t.fastFilling) hasFastFilling = true
+    return {
+      ...snapshot, ...rules, ...(await withLiveTileLabels(event.id, snapshot)), banners: await liveDefaultBanner(event.id, snapshot.banners), organiser_logo_url: hostLogo, published: event.published, booking_open: event.booking_open,
+      languages: event.languages, visibility: event.visibility, accessType,
     }
   }
 
-  return { ticketsBySlot, nextUpcomingSlotId, upcomingSlotIds, pastSlotIds, lowestActivePrice, hasFastFilling, slotStatusById }
+  const bundle = await buildEventBundle(event)
+  return { ...bundle, organiser_logo_url: await getHostLogo(event.entity_id), accessType }
 }

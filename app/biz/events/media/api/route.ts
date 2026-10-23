@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { checkEventAccess } from '@/lib/eventAccess'
+import { checkEventEditable, flagPendingEditsIfActive } from '@/lib/eventEditFlag'
 import sharp from 'sharp'
 
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024
@@ -15,22 +17,17 @@ function extractPath(fileUrl: string) {
   return idx === -1 ? null : fileUrl.slice(idx + marker.length)
 }
 
-async function checkEventEditable(eventId: string) {
-  const { data: event } = await supabaseAdmin.from('events').select('status').eq('id', eventId).maybeSingle()
-  if (!event) return { error: 'Event not found' }
-  if (event.status === 'pending') return { error: "This event is awaiting Admin review and can't be edited right now." }
-  return { status: event.status }
-}
-
-async function flagUnderReviewIfActive(eventId: string, status: string) {
-  if (status === 'active') await supabaseAdmin.from('events').update({ under_review: true }).eq('id', eventId)
-}
+// A refused person is told the event "cannot be found", never "not allowed".
+const noEvent = () => NextResponse.json({ error: 'Event not found' }, { status: 404 })
+const mayUse = async (req: NextRequest, session: any, eventId: string | null, mode: 'view' | 'edit') =>
+  (await checkEventAccess(req, session, { eventId: eventId || undefined }, mode)).ok
 
 export async function GET(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   const eventId = req.nextUrl.searchParams.get('event_id')
   if (!eventId) return NextResponse.json({ error: 'Missing event_id' }, { status: 400 })
+  if (!(await mayUse(req, session, eventId, 'view'))) return noEvent()
 
   const { data, error } = await supabaseAdmin.from('event_media')
     .select('*').eq('event_id', eventId).order('sort_order')
@@ -52,6 +49,7 @@ export async function POST(req: NextRequest) {
   const orientation = (formData.get('orientation') as string | null) || 'horizontal'
 
   if (!file || !eventId || !section) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+  if (!(await mayUse(req, session, eventId, 'edit'))) return noEvent()
   if (!['banner', 'gallery'].includes(section)) return NextResponse.json({ error: 'Invalid section' }, { status: 400 })
   if (!consentGiven) return NextResponse.json({ error: 'Usage consent is required before upload' }, { status: 400 })
 
@@ -114,7 +112,7 @@ export async function POST(req: NextRequest) {
     consent_given: true, consent_by: session.user_id, consent_at: new Date().toISOString()
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  await flagUnderReviewIfActive(eventId, editable.status!)
+  await flagPendingEditsIfActive(eventId, editable.status!)
   return NextResponse.json({ data })
 }
 
@@ -123,44 +121,47 @@ export async function PATCH(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   const body = await req.json()
   const { action, id } = body
+
+  if (action === 'reorder') {
+    const { items } = body as { items: { id: string; sort_order: number }[] }
+    if (!Array.isArray(items) || !items.length || !items.every(i => i && typeof i.id === 'string' && Number.isInteger(i.sort_order))) return NextResponse.json({ error: 'Missing items' }, { status: 400 })
+    const ids = [...new Set(items.map(i => i.id))]
+    const { data: rows } = await supabaseAdmin.from('event_media').select('id, event_id').in('id', ids)
+    const owners = [...new Set((rows || []).map((r: any) => r.event_id))] as string[]
+    // every picture must exist and belong to ONE event
+    if ((rows || []).length !== ids.length || owners.length !== 1) return noEvent()
+    if (!(await mayUse(req, session, owners[0], 'edit'))) return noEvent()
+    const editable = await checkEventEditable(owners[0])
+    if (editable.error) return NextResponse.json({ error: editable.error }, { status: 400 })
+    for (const item of items) {
+      await supabaseAdmin.from('event_media').update({ sort_order: item.sort_order }).eq('id', item.id)
+    }
+    await flagPendingEditsIfActive(owners[0], editable.status!)
+    return NextResponse.json({ success: true })
+  }
+
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const { data: row } = await supabaseAdmin.from('event_media').select('event_id, section, media_type').eq('id', id).maybeSingle()
+  if (!row || !(await mayUse(req, session, row.event_id, 'edit'))) return noEvent()
 
   if (action === 'set_default') {
-    const { data: row } = await supabaseAdmin.from('event_media').select('event_id, section, media_type').eq('id', id).maybeSingle()
-    if (!row || row.section !== 'banner') return NextResponse.json({ error: 'Not a banner item' }, { status: 400 })
+    if (row.section !== 'banner') return NextResponse.json({ error: 'Not a banner item' }, { status: 400 })
     if (row.media_type !== 'image') return NextResponse.json({ error: 'Default banner must be an image' }, { status: 400 })
     const editable = await checkEventEditable(row.event_id)
     if (editable.error) return NextResponse.json({ error: editable.error }, { status: 400 })
     await supabaseAdmin.from('event_media').update({ is_default_banner: false }).eq('event_id', row.event_id).eq('section', 'banner').eq('is_default_banner', true)
     const { data, error } = await supabaseAdmin.from('event_media').update({ is_default_banner: true }).eq('id', id).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    await flagUnderReviewIfActive(row.event_id, editable.status!)
     return NextResponse.json({ data })
   }
 
   if (action === 'update_caption') {
-    const { data: row } = await supabaseAdmin.from('event_media').select('event_id').eq('id', id).maybeSingle()
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const editable = await checkEventEditable(row.event_id)
     if (editable.error) return NextResponse.json({ error: editable.error }, { status: 400 })
     const { data, error } = await supabaseAdmin.from('event_media').update({ caption: body.caption || null }).eq('id', id).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    await flagUnderReviewIfActive(row.event_id, editable.status!)
+    await flagPendingEditsIfActive(row.event_id, editable.status!)
     return NextResponse.json({ data })
-  }
-
-  if (action === 'reorder') {
-    const { items } = body as { items: { id: string; sort_order: number }[] }
-    if (!Array.isArray(items) || !items.length) return NextResponse.json({ error: 'Missing items' }, { status: 400 })
-    const { data: firstRow } = await supabaseAdmin.from('event_media').select('event_id').eq('id', items[0].id).maybeSingle()
-    if (!firstRow) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const editable = await checkEventEditable(firstRow.event_id)
-    if (editable.error) return NextResponse.json({ error: editable.error }, { status: 400 })
-    for (const item of items) {
-      await supabaseAdmin.from('event_media').update({ sort_order: item.sort_order }).eq('id', item.id)
-    }
-    await flagUnderReviewIfActive(firstRow.event_id, editable.status!)
-    return NextResponse.json({ success: true })
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
@@ -173,7 +174,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const { data: row } = await supabaseAdmin.from('event_media').select('file_url, event_id').eq('id', id).maybeSingle()
-  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!row || !(await mayUse(req, session, row.event_id, 'edit'))) return noEvent()
   const editable = await checkEventEditable(row.event_id)
   if (editable.error) return NextResponse.json({ error: editable.error }, { status: 400 })
 
@@ -182,6 +183,6 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabaseAdmin.from('event_media').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  await flagUnderReviewIfActive(row.event_id, editable.status!)
+  await flagPendingEditsIfActive(row.event_id, editable.status!)
   return NextResponse.json({ success: true })
 }

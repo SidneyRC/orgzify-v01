@@ -28,10 +28,14 @@ export async function GET(req: NextRequest) {
 
   let query = supabaseAdmin.from('sponsors').select('id, name, logo_url, status, is_enabled, created_at', { count: 'exact' }).order('created_at', { ascending: false })
   if (search) query = query.ilike('name', `%${search}%`)
-  if (status) query = query.eq('status', status)
+    const { data: changes } = await supabaseAdmin.from('entity_pages').select('sponsor_id, pending_logo_url').not('pending_logo_url', 'is', null)
+  const changeMap: Record<string, string> = Object.fromEntries((changes || []).map((c: any) => [c.sponsor_id, c.pending_logo_url]))
+  const changeIds = Object.keys(changeMap)
+  if (status === 'pending' && changeIds.length) query = query.or(`status.eq.pending,id.in.(${changeIds.join(',')})`)
+  else if (status) query = query.eq('status', status)
   const { data, error, count } = await query.range(from, to)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ data: data || [], total: count || 0 })
+    return NextResponse.json({ data: (data || []).map((r: any) => ({ ...r, pending_logo_url: changeMap[r.id] || null })), total: count || 0 })
 }
 
 export async function POST(req: NextRequest) {
@@ -61,6 +65,18 @@ export async function PATCH(req: NextRequest) {
     if (!['approved', 'rejected'].includes(status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     if (!(await hasModuleRight(req, session, MODULE_CODE, 'can_approve'))) {
       return NextResponse.json({ error: 'You do not have permission to approve or reject sponsors.' }, { status: 403 })
+    }
+        const { data: pg } = await supabaseAdmin.from('entity_pages').select('pending_logo_url').eq('sponsor_id', id).maybeSingle()
+    if (pg?.pending_logo_url) {
+      if (status === 'approved') {
+        await supabaseAdmin.from('sponsors').update({ logo_url: pg.pending_logo_url }).eq('id', id)
+        await supabaseAdmin.from('entity_pages').update({ pending_logo_url: null, change_note: null }).eq('sponsor_id', id)
+      } else {
+        const { data: rs } = reason_id ? await supabaseAdmin.from('module_status_reasons').select('reason_label').eq('id', reason_id).maybeSingle() : { data: null }
+        const note = [rs?.reason_label, reason_note].filter(Boolean).join(' — ') || null
+        await supabaseAdmin.from('entity_pages').update({ pending_logo_url: null, change_note: note }).eq('sponsor_id', id)
+      }
+      return NextResponse.json({ data: true })
     }
     const { error } = await supabaseAdmin.from('sponsors').update({ status }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

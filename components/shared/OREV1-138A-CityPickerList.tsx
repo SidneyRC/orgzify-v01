@@ -7,9 +7,11 @@ export type PickerCity = { id: string; name: string; image_url: string | null };
 
 export default function CityPickerList({
   cities,
+  loading = false,
   onSelect,
 }: {
   cities: PickerCity[];
+  loading?: boolean;
   onSelect: (city: PickerCity) => void;
 }) {
   const { theme } = useTheme();
@@ -17,6 +19,14 @@ export default function CityPickerList({
   const accentText = theme?.btn_text ?? "#ffffff";
   const cardShadow = theme?.card_shadow ?? "0 1px 3px rgba(0,0,0,0.08)";
   const radius = theme?.global_border_radius ?? "0.75rem";
+
+  if (loading && cities.length === 0) {
+    return (
+      <p className="text-sm text-center py-6" style={{ color: theme?.color_text_muted || "#9ca3af" }}>
+        Loading cities…
+      </p>
+    );
+  }
 
   if (cities.length === 0) {
     return (

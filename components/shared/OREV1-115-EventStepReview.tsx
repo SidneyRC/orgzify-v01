@@ -8,20 +8,39 @@ import OREV1115GReviewSponsorsArtistsSocial from '@/components/shared/OREV1-115G
 import OREV1115DReviewScheduleTicketsSection from '@/components/shared/OREV1-115D-ReviewScheduleTicketsSection'
 import OREV1115EReviewBookingMethodSection from '@/components/shared/OREV1-115E-ReviewBookingMethodSection'
 import OREV1115FReviewSubmitConfirm from '@/components/shared/OREV1-115F-ReviewSubmitConfirm'
+import OREV1148EventChangesTab from '@/components/shared/OREV1-148-EventChangesTab'; import { bookingUrlProblem } from '@/lib/bookingUrlProblem'
 import type { EventDraft } from '@/components/shared/OREV1-100-EventRegistration'
 
 type StepNumbers = { info: number; additional: number; media: number; schedule: number; booking: number }
 type Props = {
-  event: EventDraft; locked: boolean; steps: StepNumbers; theme: any
+  event: EventDraft; locked: boolean; steps: StepNumbers; theme: any; adminMode?: 'view' | 'edit'
   onEditStep: (step: number) => void; onBack: () => void; onClose: () => void; onSubmitted: () => void
 }
 
-export default function OREV1115EventStepReview({ event, locked, steps, theme, onEditStep, onBack, onClose, onSubmitted }: Props) {
+export default function OREV1115EventStepReview({ event, locked, steps, theme, adminMode, onEditStep, onBack, onClose, onSubmitted }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [tab, setTab] = useState<'details' | 'changes'>('details')
+  const showTabs = !!adminMode && event.status === 'active' && !!event.under_review
+  const view = showTabs ? tab : 'details'
+  const accent = theme?.link_color || '#2563eb'
   const radius = theme?.global_border_radius || '12px'
   const outline = { backgroundColor: theme?.btn_outline_bg || '#fff', color: theme?.btn_outline_text || '#4b5563', border: `1px solid ${theme?.btn_outline_border || '#e5e7eb'}`, borderRadius: radius }
   const primary = { backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: radius }
+
+    const checkThenConfirm = async () => {
+    try {
+      const j = await (await fetch(`/biz/events/eventvenue/tickets/api?event_id=${event.id}`)).json()
+      const assigned = new Set((j.assignments || []).map((a: any) => a.event_venue_time_id))
+      for (const v of j.venues || []) for (const d of v.event_venue_dates || []) for (const t of d.event_venue_times || []) {
+        if (!assigned.has(t.id)) {
+          toast.error(`Add a ticket to the ${new Date(d.event_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}, ${String(t.start_time).slice(0, 5)} session (${v.venues?.external_name || 'Venue'})`)
+          return
+        }
+      }
+    const b = await (await fetch('/biz/events/eventvenue/bookingmethod/api?event_id=' + event.id)).json(); const urlMsg = bookingUrlProblem(b.data, b.venues || []); if (urlMsg) { toast.error(urlMsg); return } } catch { toast.error('Could not check your event. Please try again.'); return }
+    setConfirming(true)
+  }
 
   const doSubmit = async () => {
     setSubmitting(true)
@@ -39,27 +58,39 @@ export default function OREV1115EventStepReview({ event, locked, steps, theme, o
       <p className="text-xs" style={{ color: theme?.color_text_muted || '#9ca3af' }}>
         Check every section below. Use Edit to fix anything before submitting for Admin approval.
       </p>
-      {event.status === 'pending' && (
+            {(event.status === 'pending' || event.under_review) && (
         <div className="rounded-xl px-4 py-3 text-sm" style={{ backgroundColor: '#fffbeb', color: '#b45309', borderRadius: radius }}>
           Your event has been submitted and is with our team for review. This usually takes within 48 hours — we'll notify you as soon as it's approved.
         </div>
       )}
 
-      <OREV1115BReviewInfoSection event={event} onEditInfo={() => onEditStep(steps.info)} onEditAdditional={() => onEditStep(steps.additional)} theme={theme} />
-      <OREV1115CReviewMediaSection eventId={event.id} onEdit={() => onEditStep(steps.media)} theme={theme} />
-      <OREV1115GReviewSponsorsArtistsSocial eventId={event.id} onEdit={() => onEditStep(steps.media)} theme={theme} />
-      <OREV1115DReviewScheduleTicketsSection eventId={event.id} onEdit={() => onEditStep(steps.schedule)} theme={theme} />
-      <OREV1115EReviewBookingMethodSection eventId={event.id} onEdit={() => onEditStep(steps.booking)} theme={theme} />
+      {showTabs && (
+        <div className="flex gap-1 border-b" style={{ borderColor: theme?.divider_color || '#e5e7eb' }}>
+          {([['details', 'Details'], ['changes', "What's changed"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)} className="px-4 py-2 text-sm font-medium -mb-px" style={{ color: tab === k ? accent : (theme?.color_text_muted || '#9ca3af'), borderBottom: '2px solid ' + (tab === k ? accent : 'transparent') }}>{l}</button>
+          ))}
+        </div>
+      )}
+      {view === 'changes' && <OREV1148EventChangesTab eventId={event.id} theme={theme} />}
+      {view === 'details' && (
+        <>
+        <OREV1115BReviewInfoSection event={event} onEditInfo={() => onEditStep(steps.info)} onEditAdditional={() => onEditStep(steps.additional)} theme={theme} />
+        <OREV1115CReviewMediaSection eventId={event.id} onEdit={() => onEditStep(steps.media)} theme={theme} />
+        <OREV1115GReviewSponsorsArtistsSocial eventId={event.id} onEdit={() => onEditStep(steps.media)} theme={theme} />
+        <OREV1115DReviewScheduleTicketsSection eventId={event.id} onEdit={() => onEditStep(steps.schedule)} theme={theme} />
+        <OREV1115EReviewBookingMethodSection eventId={event.id} onEdit={() => onEditStep(steps.booking)} theme={theme} />
+        </>
+      )}
 
       <div className="hidden sm:flex sm:justify-end sm:gap-2 mt-2">
         <button onClick={onBack} style={outline} className="px-4 py-2 text-sm">← Back</button>
         <button onClick={onClose} style={outline} className="px-4 py-2 text-sm">✕ Close</button>
-        {event.status === 'draft' && <button onClick={() => setConfirming(true)} style={primary} className="px-4 py-2 text-sm font-medium">Submit for Approval</button>}
+                {(['draft', 'rejected'].includes(event.status) || (event.status === 'active' && !event.under_review && event.has_pending_edits)) && <button onClick={checkThenConfirm} style={primary} className="px-4 py-2 text-sm font-medium">Submit for Approval</button>}
       </div>
       <div className="flex gap-1.5 sm:hidden mt-2">
         <button onClick={onBack} style={outline} className="flex-1 py-2 text-sm">← Back</button>
         <button onClick={onClose} style={outline} className="flex-1 py-2 text-sm">✕ Close</button>
-        {event.status === 'draft' && <button onClick={() => setConfirming(true)} style={primary} className="flex-1 py-2 text-sm font-medium">Submit</button>}
+                {(['draft', 'rejected'].includes(event.status) || (event.status === 'active' && !event.under_review && event.has_pending_edits)) && <button onClick={checkThenConfirm} style={primary} className="flex-1 py-2 text-sm font-medium">Submit</button>}
       </div>
 
       {confirming && <OREV1115FReviewSubmitConfirm submitting={submitting} onConfirm={doSubmit} onCancel={() => setConfirming(false)} theme={theme} />}

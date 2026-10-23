@@ -1,6 +1,6 @@
 // THIS FILE GOES IN: components/shared/OREV1-108-EventStepAdditional.tsx (REPLACES existing file)
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
 import toast from 'react-hot-toast'
 import OREV1102BRichTextEditor from '@/components/shared/OREV1-102B-RichTextEditor'
@@ -8,9 +8,23 @@ import OREV1108BTagPicker from '@/components/shared/OREV1-108B-TagPicker'
 import type { EventDraft } from '@/components/shared/OREV1-100-EventRegistration'
 
 const API = '/biz/events/api'
-const DEFAULT_TC = '<p>By participating in this event, attendees agree to follow the organiser\'s rules and safety guidelines. Entry fees, once paid, are subject to the refund setting chosen for this event. The organiser is responsible for all on-ground arrangements.</p>'
+const DEFAULT_TC = `<ol>
+<li>Tickets once booked cannot be exchanged or refunded</li>
+<li>An Internet handling fee per ticket may be levied. Please check the total amount before payment</li>
+<li>We recommend that you arrive at-least 30 minutes prior at the venue for a seamless entry</li>
+<li>It is mandatory to wear masks at all times and follow social distancing norms</li>
+<li>Please do not purchase tickets if you feel sick</li>
+<li>Unlawful resale (or attempted unlawful resale) of a ticket would lead to seizure or cancellation of that ticket without refund or other compensation</li>
+<li>Rights of admission reserved</li>
+<li>These terms and conditions are subject to change from time to time at the discretion of the organizer</li>
+</ol>`
 
 type Props = { event: EventDraft | null; locked: boolean; onSaved: (updated: EventDraft) => void; onBack: () => void; onClose: () => void }
+
+const sameTags = (a: { id: string }[], b: { id: string }[]) => {
+  const x = a.map(t => t.id).sort(), y = b.map(t => t.id).sort()
+  return x.length === y.length && x.every((v, i) => v === y[i])
+}
 
 export default function OREV1108EventStepAdditional({ event, locked, onSaved, onBack, onClose }: Props) {
   const { theme } = useTheme()
@@ -25,12 +39,32 @@ export default function OREV1108EventStepAdditional({ event, locked, onSaved, on
   const [description, setDescription] = useState(event?.description || '')
   const [terms, setTerms] = useState(event?.terms_conditions || DEFAULT_TC)
   const [tags, setTags] = useState<{ id: string; name: string }[]>([])
+  const [tagsLoaded, setTagsLoaded] = useState(false)
   const [error, setError] = useState('')
   const [tagError, setTagError] = useState('')
   const [minAgeError, setMinAgeError] = useState('')
   const [durationError, setDurationError] = useState('')
   const [termsError, setTermsError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Snapshot of original values, used to detect if anything actually changed on Save
+  const [original, setOriginal] = useState({
+    minAge: event?.min_age?.toString() || '',
+    duration: (event as any)?.event_duration_minutes?.toString() || '',
+    refund: event?.refund_allowed ?? true,
+    description: event?.description || '',
+    terms: event?.terms_conditions || DEFAULT_TC,
+    tags: [] as { id: string; name: string }[],
+  })
+
+    useEffect(() => {
+    if (!event?.id) return
+    fetch(`${API}?type=event_tags&event_id=${event.id}`).then(r => r.json()).then(j => {
+      const loaded = j.data || []
+      if (loaded.length) { setTags(loaded); setOriginal(o => ({ ...o, tags: loaded })) }
+      setTagsLoaded(true)
+    })
+  }, [event?.id])
 
   const plainLength = (html: string) => html.replace(/<[^>]*>/g, '').trim().length
 
@@ -54,7 +88,15 @@ export default function OREV1108EventStepAdditional({ event, locked, onSaved, on
     const json = await res.json()
     setSaving(false)
     if (json.error) { toast.error(json.error); return }
-    toast.success(event?.status === 'active' ? 'Changes sent for re-verification' : 'Saved')
+
+    const isNewEvent = !event?.id
+    const changed = isNewEvent
+      || minAge !== original.minAge || duration !== original.duration || refund !== original.refund
+      || description !== original.description || terms !== original.terms || !sameTags(tags, original.tags)
+
+    if (changed) toast.success('Saved to draft')
+
+    setOriginal({ minAge, duration, refund, description, terms, tags })
     onSaved(json.data)
   }
 
@@ -96,7 +138,6 @@ export default function OREV1108EventStepAdditional({ event, locked, onSaved, on
         <div className="flex flex-col gap-1">
           <label className="text-xs text-gray-500">Terms &amp; Conditions <span className="text-red-500">*</span></label>
           <OREV1102BRichTextEditor value={terms} onChange={setTerms} theme={theme} radius={radius} />
-          <span className="text-xs text-gray-400">Pre-filled with standard terms — edit as needed for your event.</span>
           {termsError && <span className="text-xs text-red-500">{termsError}</span>}
         </div>
       </fieldset>

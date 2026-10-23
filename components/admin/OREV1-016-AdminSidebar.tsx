@@ -47,7 +47,7 @@ export default function AdminSidebar({ expanded, setExpanded, mobileOpen, setMob
   const visibleSetup = showSetup
     ? (isCompanyMode ? [{ icon: Settings, label: "Setup", href: companySetupHref(slug!) }] : setupNav)
     : [];
-  const showMaster = !isCompanyMode && !isEntityMode || (isCompanyMode && (rights ?? []).some(r => ["categories", "event_tags_format"].includes(r)));
+    const showMaster = !isCompanyMode && !isEntityMode || (isCompanyMode && (rights ?? []).some(r => ["categories", "event_tags_format", "event_categories"].includes(r)));
   const visibleMaster = showMaster ? masterNav : [];
   const showEcosystem = !isCompanyMode && !isEntityMode || (isCompanyMode && (rights ?? []).some(r => ["entities", "support"].includes(r)));
   const visibleEcosystem = showEcosystem ? ecosystemNav : [];

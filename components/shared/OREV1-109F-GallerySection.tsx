@@ -25,8 +25,7 @@ export default function OREV1109FGallerySection({ gallery, theme, radius, onDrag
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-1" style={{ color: theme?.color_text_primary || '#111827' }}>Gallery (optional)</h3>
-      <p className="text-xs mb-3" style={{ color: theme?.color_text_muted || '#9ca3af' }}>No limit — drag to reorder, add captions if useful. Orientation is detected automatically from each photo.</p>
+            <h3 className="text-lg font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Gallery (optional) <span className="font-normal text-xs" style={{ color: theme?.color_text_muted || '#9ca3af' }}>| landscape 2:1 or portrait 1:3 | up to 2MB | Max 5 Images</span></h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
         {gallery.length > 0 && (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>

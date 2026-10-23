@@ -1,44 +1,41 @@
-// THIS FILE GOES IN: components/shared/OREV1-109D-SponsorSearchAdd.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-109D-SponsorSearchAdd.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 import OREV1116SponsorCreateForm from '@/components/shared/OREV1-116-SponsorCreateForm'
+import OREV1159SponsorDuplicateWarning from '@/components/shared/OREV1-159-SponsorDuplicateWarning'
 const SPONSORS_API = '/biz/events/sponsors/api'
 const TYPE_SUGGESTIONS = ['Title Sponsor', 'Presenting Sponsor', 'Venue Partner', 'Official Ticketing Partner', 'Media Partner', 'Hospitality Partner', 'Beverage Partner', 'Merchandise Partner']
 type Sponsor = { id: string; name: string; logo_url: string | null }
-type Props = { locked: boolean; theme: any; onAssign: (sponsor: Sponsor, sponsorType: string) => void }
-
+type Props = { locked: boolean; theme: any; onAssign: (sponsor: Sponsor, sponsorType: string) => void; existingSponsors: { name: string; logo_url: string | null; sponsor_type?: string }[] }
 function Field({ label, children, theme }: { label: string; children: any; theme: any }) {
   return <div><label className="text-xs font-medium block mb-1" style={{ color: theme?.color_text_muted || '#9ca3af' }}>{label}</label>{children}</div>
 }
-
-export default function OREV1109DSponsorSearchAdd({ locked, theme, onAssign }: Props) {
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState<Sponsor[]>([])
-  const [selected, setSelected] = useState<Sponsor | null>(null)
-  const [sponsorType, setSponsorType] = useState('')
-  const [typeFocused, setTypeFocused] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null)
+export default function OREV1109DSponsorSearchAdd({ locked, theme, onAssign, existingSponsors }: Props) {
+  const [q, setQ] = useState(''); const [results, setResults] = useState<Sponsor[]>([]); const [selected, setSelected] = useState<Sponsor | null>(null)
+  const [sponsorType, setSponsorType] = useState(''); const [typeFocused, setTypeFocused] = useState(false); const [creating, setCreating] = useState(false)
+  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null); const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; logo_url: string | null; type?: string } | null>(null)
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
   const typeMatches = TYPE_SUGGESTIONS.filter(t => t.toLowerCase().includes(sponsorType.toLowerCase()))
-
   useEffect(() => {
     if (!zoomedUrl) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setZoomedUrl(null) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey)
   }, [zoomedUrl])
-
   const runSearch = async (val: string) => {
     setQ(val); setSelected(null)
     if (!val.trim()) { setResults([]); return }
-    const res = await fetch(`${SPONSORS_API}?search=${encodeURIComponent(val)}`)
-    const json = await res.json()
-    setResults(json.data || [])
+    const res = await fetch(`${SPONSORS_API}?search=${encodeURIComponent(val)}`); const json = await res.json(); setResults(json.data || [])
   }
-
-
+  const handlePick = (s: Sponsor) => { setSelected(s); setQ(s.name); setResults([]) }
+  const handleAdd = () => {
+    if (!selected) return
+    const type = sponsorType.trim(); const same = (a: string) => a.trim().toLowerCase()
+    const dup = existingSponsors.find(es => same(es.name) === same(selected.name) && same(es.sponsor_type || '') === same(type))
+    if (dup) setDuplicateWarning({ name: dup.name, logo_url: dup.logo_url, type })
+    else onAssign(selected, type)
+    setSelected(null); setQ(''); setSponsorType('')
+  }
   return (
     <div className="border border-gray-100 rounded-xl p-4">
       <Field label="Search sponsor by name" theme={theme}>
@@ -50,7 +47,7 @@ export default function OREV1109DSponsorSearchAdd({ locked, theme, onAssign }: P
       {q.trim() && !selected && (
         <div className="mt-1 border border-gray-100 rounded-xl max-h-40 overflow-y-auto">
           {results.map(s => (
-            <button key={s.id} type="button" onClick={() => { setSelected(s); setQ(s.name); setResults([]) }} className="w-full flex items-center gap-3 text-left text-sm px-3 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+            <button key={s.id} type="button" onClick={() => handlePick(s)} className="w-full flex items-center gap-3 text-left text-sm px-3 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0">
               {s.logo_url ? (
                 <div className="relative w-14 h-14 shrink-0" onClick={e => { e.stopPropagation(); setZoomedUrl(s.logo_url) }}>
                   <img src={s.logo_url} className="w-14 h-14 rounded-full object-cover cursor-zoom-in" />
@@ -77,7 +74,7 @@ export default function OREV1109DSponsorSearchAdd({ locked, theme, onAssign }: P
             )}
             <div className="flex justify-end gap-2 mt-4">
               <button type="button" onClick={() => { setSelected(null); setQ(''); setSponsorType('') }} style={{ backgroundColor: theme?.btn_outline_bg || '#fff', color: theme?.btn_outline_text || '#4b5563', border: `1px solid ${theme?.btn_outline_border || '#e5e7eb'}`, borderRadius: radius }} className="px-4 py-2 text-sm">Cancel</button>
-              {!locked && <button type="button" disabled={!sponsorType.trim()} onClick={() => { onAssign(selected, sponsorType.trim()); setSelected(null); setQ(''); setSponsorType('') }} style={{ backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: radius }} className="px-4 py-2 text-sm disabled:opacity-40">Add sponsor</button>}
+              {!locked && <button type="button" disabled={!sponsorType.trim()} onClick={handleAdd} style={{ backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: radius }} className="px-4 py-2 text-sm disabled:opacity-40">Add sponsor</button>}
             </div>
           </div>
         </div>
@@ -89,6 +86,7 @@ export default function OREV1109DSponsorSearchAdd({ locked, theme, onAssign }: P
           </div>
         </div>
       )}
+      <OREV1159SponsorDuplicateWarning warning={duplicateWarning} theme={theme} onClose={() => setDuplicateWarning(null)} />
       {zoomedUrl && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setZoomedUrl(null)}>
           <img src={zoomedUrl} className="max-w-md max-h-[80vh] rounded-2xl object-contain bg-white" />

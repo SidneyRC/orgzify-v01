@@ -46,7 +46,7 @@ export default function OREV1102BRichTextEditor({ value, onChange, theme, radius
         contentEditable
         suppressContentEditableWarning
         onInput={() => onChange(ref.current?.innerHTML || '')}
-        className="px-3 py-2 text-sm min-h-[140px] max-h-[300px] overflow-y-auto focus:outline-none"
+                className="px-3 py-2 text-sm min-h-[140px] max-h-[300px] overflow-y-auto focus:outline-none [&_ol]:list-decimal [&_ul]:list-disc [&_ol]:pl-5 [&_ul]:pl-5 [&_li]:mb-1"
       />
     </div>
   )

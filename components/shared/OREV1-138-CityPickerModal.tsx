@@ -5,27 +5,27 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import CityPickerList, { PickerCity } from "@/components/shared/OREV1-138A-CityPickerList";
-
-type CountryGroup = { country_id: string; country_name: string; flag_url: string; cities: PickerCity[] };
+import { CountryGroup, getCachedCities, loadCities } from "@/lib/cityListCache";
 
 export default function CityPickerModal({ onSelect, onClose }: {
   onSelect: (city: PickerCity) => void;
   onClose: () => void;
 }) {
   const { theme } = useTheme();
-  const [countries, setCountries] = useState<CountryGroup[]>([]);
-  const [activeCountry, setActiveCountry] = useState<string>("");
+  const [countries, setCountries] = useState<CountryGroup[]>(getCachedCities() ?? []);
+  const [loading, setLoading] = useState(!getCachedCities());
+  const [activeCountry, setActiveCountry] = useState<string>(getCachedCities()?.[0]?.country_id ?? "");
   const [search, setSearch] = useState("");
   const [nearbyOrder, setNearbyOrder] = useState<string[] | null>(null);
 
   useEffect(() => {
-    fetch("/citypicker/api")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const list: CountryGroup[] = data?.countries ?? [];
+    loadCities().then(list => {
+      if (list) {
         setCountries(list);
-        if (list.length > 0) setActiveCountry(list[0].country_id);
-      });
+        setActiveCountry(prev => list.some(c => c.country_id === prev) ? prev : (list[0]?.country_id ?? ""));
+      }
+      setLoading(false);
+    });
   }, []);
 
   const allCities = useMemo(() => countries.flatMap(c => c.cities), [countries]);
@@ -111,7 +111,7 @@ export default function CityPickerModal({ onSelect, onClose }: {
         )}
 
         <div className="p-5 overflow-y-auto">
-          <CityPickerList cities={visibleCities} onSelect={onSelect} />
+          <CityPickerList cities={visibleCities} loading={loading} onSelect={onSelect} />
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import AdminShell from '@/components/admin/OREV1-042-AdminShell'
+import OREV1147EventDecisionToasts from '@/components/shared/OREV1-147-EventDecisionToasts'
 
 type ModuleAccess = { pages: boolean; academy: boolean; events: boolean }
 
@@ -37,6 +38,7 @@ export default function EntityShellLayout({ children }: { children: React.ReactN
 
   return (
     <AdminShell initialName="" initialAvatar="" entityName={entityName} entityId={entityId} entitySlug={slug} entityModuleAccess={moduleAccess} hideSidebar={isBareDashboard}>
+      {entityId && <OREV1147EventDecisionToasts entityId={entityId} />}
       {children}
     </AdminShell>
   )

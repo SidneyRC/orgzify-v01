@@ -1,13 +1,21 @@
-// THIS FILE GOES IN: app/biz/events/eventvenue/bookingmethod/upload-qr/api/route.ts (NEW FILE)
+// THIS FILE GOES IN: app/biz/events/eventvenue/bookingmethod/upload-qr/api/route.ts (REPLACES existing file)
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSession } from '@/lib/auth'
+import { checkEventAccess } from '@/lib/eventAccess'
 import sharp from 'sharp'
 
 export async function POST(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
   const form = await req.formData()
   const file = form.get('file') as File | null
   const eventId = form.get('event_id') as string
   if (!file || !eventId) return NextResponse.json({ error: 'file and event_id required' }, { status: 400 })
+  // A refused person is told the event "cannot be found", never "not allowed".
+  if (!(await checkEventAccess(req, session, { eventId }, 'edit')).ok) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+  if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'File must be an image' }, { status: 400 })
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const webp = await sharp(buffer).resize({ width: 1600, withoutEnlargement: true }).webp({ quality: 82, effort: 6 }).toBuffer()

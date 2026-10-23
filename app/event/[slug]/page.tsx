@@ -1,6 +1,7 @@
 // THIS FILE GOES IN: app/event/[slug]/page.tsx (REPLACES existing file)
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Navbar from "@/components/shared/OREV1-026-Navbar";
 import CityGate from "@/components/shared/OREV1-139-CityGate";
 import OREV1130EventPageClient from "@/components/shared/OREV1-130-EventPageClient";
@@ -10,22 +11,20 @@ import { getEventBySlugOrCode } from "@/lib/getEventBySlugOrCode";
 import { checkEventVisibility } from "@/lib/checkEventVisibility";
 import { getServerSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { buildEventMetadata } from "@/lib/buildEventMetadata";
+import { buildEventJsonLd } from "@/lib/buildEventJsonLd"; 
+import { getRelatedEvents } from "@/lib/getRelatedEvents"; 
+import { pickPublicEventFields } from "@/lib/pickPublicEventFields";
 
 type Props = { params: Promise<{ slug: string }> };
 const BASE_URL = "https://www.orgzify.com";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const event = await getEventBySlugOrCode(slug);
-  if (!event) return { title: "Event — Orgzify" };
-  const title = `${event.name} — Orgzify`;
-  const description = (event.description || "").replace(/<[^>]*>/g, "").slice(0, 150);
-  return {
-    title,
-    description,
-    alternates: { canonical: `${BASE_URL}/event/${slug}` },
-    openGraph: { title, description, images: [{ url: event.banners[0]?.file_url || "" }] },
-  };
+  const session = await getServerSession();
+  const event = await getEventBySlugOrCode(slug, session);
+  if (!event || !(await checkEventVisibility(event, session))) return { title: "Event — Orgzify" };
+  return buildEventMetadata(event, slug);
 }
 
 export default async function EventPage({ params }: Props) {
@@ -33,10 +32,25 @@ export default async function EventPage({ params }: Props) {
   const cookieHeader = (await headers()).get("cookie") ?? "";
   const hasCity = /(^|;\s*)orgzify_city_id=/.test(cookieHeader);
 
-    const event = await getEventBySlugOrCode(slug);
   const session = await getServerSession();
+  const event = await getEventBySlugOrCode(slug, session);
 
-    let initialInterested = false;
+  let redirectSlug: string | null = null;
+  if (!event) {
+    const { data: redirect } = await supabaseAdmin
+      .from('event_slug_redirects')
+      .select('event_id')
+      .eq('old_slug', slug)
+      .order('created_at', { ascending: false })
+      .maybeSingle();
+    if (redirect) {
+      const { data: currentEvent } = await supabaseAdmin.from('events').select('slug').eq('id', redirect.event_id).maybeSingle();
+      if (currentEvent) redirectSlug = currentEvent.slug;
+    }
+  }
+  if (redirectSlug) redirect(`/event/${redirectSlug}`);
+
+  let initialInterested = false;
   let initialCount = 0;
   if (event) {
     const { count } = await supabaseAdmin
@@ -56,7 +70,7 @@ export default async function EventPage({ params }: Props) {
     }
   }
 
-  if (!event || !checkEventVisibility(event)) {
+  if (!event || !(await checkEventVisibility(event, session))) {
     return (
       <>
         <Navbar />
@@ -67,16 +81,9 @@ export default async function EventPage({ params }: Props) {
     );
   }
 
-  const theme = await getResolvedTheme(event.reporting_office_id);
+  const theme: any = await getResolvedTheme(event.reporting_office_id); if (theme) { delete theme.created_by; delete theme.created_at; delete theme.updated_at } const cityPart = cookieHeader.split(";").map(c => c.trim()).find(c => c.startsWith("orgzify_city_id=")); const related = await getRelatedEvents(event, cityPart ? decodeURIComponent(cityPart.split("=")[1]) : null, session ? session.user_id : null);
 
-  const eventJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Event",
-    name: event.name,
-    startDate: event.venues[0]?.dates[0]?.event_date,
-    location: { "@type": "Place", name: event.venues[0]?.external_name, address: event.venues[0]?.line1 },
-    image: event.banners[0]?.file_url,
-  };
+  const eventJsonLd = buildEventJsonLd(event, slug);
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -84,7 +91,7 @@ export default async function EventPage({ params }: Props) {
       { "@type": "ListItem", position: 1, name: "Home", item: BASE_URL },
       { "@type": "ListItem", position: 2, name: "Events", item: `${BASE_URL}/events` },
       { "@type": "ListItem", position: 3, name: event.category_name, item: `${BASE_URL}/events?category=${event.category_name}` },
-      { "@type": "ListItem", position: 4, name: event.name, item: `${BASE_URL}/event/${slug}` },
+      { "@type": "ListItem", position: 4, name: event.name, item: BASE_URL + "/event/" + (event.slug || slug) },
     ],
   };
 
@@ -94,7 +101,7 @@ export default async function EventPage({ params }: Props) {
       <CityGate hasCity={hasCity} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(eventJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
-            <OREV1130EventPageClient event={event} isLoggedIn={!!session} initialInterested={initialInterested} initialCount={initialCount} />
+      <OREV1130EventPageClient event={pickPublicEventFields({ ...event, recommendations: related })} isLoggedIn={!!session} initialInterested={initialInterested} initialCount={initialCount} />
     </ThemeProvider>
   );
 }

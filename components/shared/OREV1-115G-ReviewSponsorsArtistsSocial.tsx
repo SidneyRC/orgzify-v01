@@ -1,7 +1,8 @@
-// THIS FILE GOES IN: components/shared/OREV1-115G-ReviewSponsorsArtistsSocial.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-115G-ReviewSponsorsArtistsSocial.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 import OREV1115AReviewSectionHeader from '@/components/shared/OREV1-115A-ReviewSectionHeader'
+import { isAllowedPlatform } from '@/lib/socialLinkRules'
 
 type Props = { eventId: string; onEdit: () => void; theme: any }
 
@@ -11,9 +12,9 @@ export default function OREV1115GReviewSponsorsArtistsSocial({ eventId, onEdit, 
   const [links, setLinks] = useState<any[]>([])
   useEffect(() => {
     if (!eventId) return
-    fetch(`/biz/events/sponsors/api?event_id=${eventId}`).then(r => r.json()).then(j => setSponsors(j.data || []))
-    fetch(`/biz/events/artists/api?event_id=${eventId}`).then(r => r.json()).then(j => setArtists(j.data || []))
-    fetch(`/biz/events/sociallinks/api?event_id=${eventId}`).then(r => r.json()).then(j => setLinks(j.data || []))
+      fetch(`/biz/events/sponsors/api?event_id=${eventId}`).then(r => r.json()).then(j => setSponsors(j.data || [])).catch(() => {})
+      fetch(`/biz/events/artists/api?event_id=${eventId}`).then(r => r.json()).then(j => setArtists(j.data || [])).catch(() => {})
+      fetch(`/biz/events/sociallinks/api?event_id=${eventId}`).then(r => r.json()).then(j => setLinks((j.data || []).filter((l: any) => isAllowedPlatform(l.platform)))).catch(() => {})
   }, [eventId])
   const mutedText = { color: theme?.color_text_muted || '#9ca3af' }
   const headText = { color: theme?.color_text_primary || '#111827' }
@@ -22,7 +23,7 @@ export default function OREV1115GReviewSponsorsArtistsSocial({ eventId, onEdit, 
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-      <OREV1115AReviewSectionHeader title="Sponsors, Artists & Social Links" onEdit={onEdit} theme={theme} />
+      <OREV1115AReviewSectionHeader title="Sponsors, Artists & Video Links" onEdit={onEdit} theme={theme} />
       <div className="p-3 flex flex-col gap-3">
         {sponsors.length > 0 && (
           <div>
@@ -52,9 +53,9 @@ export default function OREV1115GReviewSponsorsArtistsSocial({ eventId, onEdit, 
         )}
         {links.length > 0 && (
           <div>
-            <p className="text-xs mb-1.5" style={mutedText}>Social Links</p>
+            <p className="text-xs mb-1.5" style={mutedText}>Video Links</p>
             <div className="flex flex-col gap-1">
-              {links.map((l: any) => <p key={l.id} className="text-xs" style={headText}>{l.platform}: {l.url}</p>)}
+              {links.map((l: any) => <p key={l.id} className="text-xs break-all" style={headText}>{l.platform}: {l.url}</p>)}
             </div>
           </div>
         )}

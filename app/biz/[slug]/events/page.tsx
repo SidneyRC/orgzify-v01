@@ -4,22 +4,14 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTheme } from '@/lib/ThemeContext'
 import toast from 'react-hot-toast'
+import OREV1150EventListRow, { EventListHeader, type EventRow } from '@/components/shared/OREV1-150-EventListRow'
 
-type EventRow = {
-  id: string; process_id: string; name: string; slug: string; status: string
-  published: boolean; booking_open: boolean; under_review: boolean; event_format: string
-}
 const TABS = [
   { key: 'live', label: 'Live' },
   { key: 'draft', label: 'Draft' },
   { key: 'unlisted', label: 'Unlisted' },
   { key: 'closed', label: 'Closed' },
 ]
-const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending: 'Pending', active: 'Active', rejected: 'Rejected' }
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-500', pending: 'bg-yellow-100 text-yellow-700',
-  active: 'bg-green-100 text-green-700', rejected: 'bg-red-200 text-red-800'
-}
 
 export default function EventsListPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -123,35 +115,14 @@ export default function EventsListPage() {
       ) : rows.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-sm text-gray-400">No events here yet.</div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {rows.map(ev => (
-            <div key={ev.id} onClick={() => router.push(`/biz/${slug}/events/create?ref=${ev.process_id}`)}
-              className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center justify-between gap-3 cursor-pointer hover:shadow-sm transition">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{ev.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{ev.process_id} · {ev.event_format}</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[ev.status] || 'bg-gray-100 text-gray-500'}`}>{STATUS_LABELS[ev.status] || ev.status}</span>
-                {ev.under_review && <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-blue-100 text-blue-600">In Review</span>}
-
-                {ev.status === 'active' && (
-                  <button onClick={e => handleToggleBooking(ev, e)} title={ev.booking_open ? 'Turn booking off' : 'Turn booking on'}
-                    className="relative inline-flex h-6 w-11 items-center rounded-full transition shrink-0"
-                    style={{ backgroundColor: ev.booking_open ? '#22c55e' : (theme?.btn_disabled_bg || '#e5e7eb') }}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${ev.booking_open ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                )}
-
-                {(ev.status === 'draft' || ev.status === 'pending') && (
-                  <button onClick={e => handleDelete(ev, e)} title="Delete" className="text-red-400 hover:text-red-700 transition p-1 rounded-lg hover:bg-red-50">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <>
+          <EventListHeader theme={theme} showBooking={tab !== 'draft'} />
+          <div className="flex flex-col gap-3">
+            {rows.map(ev => (
+              <OREV1150EventListRow key={ev.id} ev={ev} theme={theme} onOpen={() => router.push(`/biz/${slug}/events/create?ref=${ev.process_id}`)} onToggle={handleToggleBooking} onDelete={handleDelete} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

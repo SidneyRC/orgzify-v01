@@ -1,11 +1,11 @@
 // GOES IN: lib/adminModules.ts
-export const ADMIN_MODULES = ['companies', 'location', 'assign_roles', 'geofence', 'themes', 'roles', 'entities', 'support', 'help_desk', 'categories', 'event_tags_format', 'countries', 'venue', 'events', 'sponsors', 'artists'] as const
+export const ADMIN_MODULES = ['companies', 'location', 'assign_roles', 'geofence', 'themes', 'roles', 'entities', 'support', 'help_desk', 'categories', 'event_categories', 'event_tags_format', 'countries', 'venue', 'events', 'sponsors', 'artists'] as const
 
 export const ADMIN_MODULE_LABELS: Record<string, string> = {
   companies: 'Companies', location: 'Location', assign_roles: 'Assign Roles',
   geofence: 'Geofence', themes: 'Themes', roles: 'Roles & Rights',
   entities: 'Entities', support: 'Support', help_desk: 'Help Desk',
-  categories: 'Help Desk Categories', event_tags_format: 'Event Tags Format',
+  categories: 'Help Desk Categories', event_categories: 'Event Categories', event_tags_format: 'Event Tags Format',
   countries: 'Countries', venue: 'Venue', events: 'Events',
   sponsors: 'Sponsors', artists: 'Artists'
 }
@@ -29,6 +29,7 @@ export const ADMIN_MODULE_EXTRA_RIGHTS: Record<string, string[]> = {
   entities: ['can_approve', 'can_restore', 'can_activate'],
   companies: ['can_approve'],
   categories: ['can_restore', 'can_hard_delete'],
+  event_categories: ['can_restore'],
   event_tags_format: ['can_restore'],
   countries: ['can_sync'],
   sponsors: ['can_approve', 'can_hard_delete'],

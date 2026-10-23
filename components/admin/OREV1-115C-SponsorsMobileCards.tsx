@@ -1,13 +1,25 @@
 // THIS FILE GOES IN: components/admin/OREV1-115C-SponsorsMobileCards.tsx (NEW FILE)
 'use client'
 import { useState, useEffect } from 'react'
-type SponsorRow = { id: string; name: string; logo_url: string | null; status: string; is_enabled: boolean; created_at: string }
+type SponsorRow = { id: string; name: string; logo_url: string | null; status: string; is_enabled: boolean; created_at: string; pending_logo_url?: string | null }
 type Props = { rows: SponsorRow[]; loading: boolean; theme: any; STATUS_LABELS: Record<string, string>; STATUS_COLORS: Record<string, string>; onApprove: (r: SponsorRow) => void; onReject: (r: SponsorRow) => void; onEdit: (r: SponsorRow) => void; onToggleEnabled: (r: SponsorRow) => void; onDelete: (r: SponsorRow) => void }
 
 const IconAccept = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
 const IconReject = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
 const IconDelete = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+
+function LogoCell({ r, size, onZoom }: { r: SponsorRow; size: string; onZoom: (u: string | null) => void }) {
+  const pic = (u: string | null | undefined) => u ? <img src={u} onClick={() => onZoom(u)} className={`${size} rounded-lg object-cover cursor-zoom-in shrink-0`} /> : <span className={`${size} rounded-lg bg-gray-100 inline-block shrink-0`} />
+  if (!r.pending_logo_url) return pic(r.logo_url)
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex flex-col items-center gap-1">{pic(r.logo_url)}<span className="text-xs text-gray-400">Live</span></div>
+      <span className="text-gray-400">→</span>
+      <div className="flex flex-col items-center gap-1">{pic(r.pending_logo_url)}<span className="text-xs text-gray-400">New</span></div>
+    </div>
+  )
+}
 
 function EnableToggle({ r, onToggle, theme }: { r: SponsorRow; onToggle: (r: SponsorRow) => void; theme: any }) {
   if (r.status !== 'approved') return null
@@ -34,16 +46,16 @@ export default function OREV1115CSponsorsMobileCards({ rows, loading, theme, STA
         <div key={r.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col gap-3 shadow-sm">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              {r.logo_url ? <img src={r.logo_url} onClick={() => setZoomedUrl(r.logo_url)} className="w-12 h-12 rounded-lg object-cover cursor-zoom-in shrink-0" /> : <span className="w-12 h-12 rounded-lg bg-gray-100 inline-block shrink-0" />}
+              <LogoCell r={r} size="w-12 h-12" onZoom={setZoomedUrl} />
               <p className="font-semibold text-sm truncate" style={{ color: theme?.color_text_primary || '#111827' }}>{r.name}</p>
             </div>
-            <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_COLORS[r.status] || 'bg-gray-100 text-gray-500'}`}>{STATUS_LABELS[r.status] || r.status}</span>
+            <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_COLORS[r.pending_logo_url ? 'pending' : r.status] || 'bg-gray-100 text-gray-500'}`}>{r.pending_logo_url ? 'Logo update' : (STATUS_LABELS[r.status] || r.status)}</span>
           </div>
           <div className="flex items-center justify-between pt-1 border-t">
             <button onClick={() => onEdit(r)} title="Edit" className="text-blue-400 hover:text-blue-700 transition p-1 rounded-lg hover:bg-blue-50"><IconEdit /></button>
             <div className="flex items-center gap-3">
               <EnableToggle r={r} onToggle={onToggleEnabled} theme={theme} />
-              {r.status === 'pending' && (
+              {(r.status === 'pending' || r.pending_logo_url) && (
                 <>
                   <button onClick={() => onApprove(r)} title="Approve" className="text-green-500 hover:text-green-700 transition p-1 rounded-lg hover:bg-green-50"><IconAccept /></button>
                   <button onClick={() => onReject(r)} title="Reject" className="text-red-500 hover:text-red-700 transition p-1 rounded-lg hover:bg-red-50"><IconReject /></button>

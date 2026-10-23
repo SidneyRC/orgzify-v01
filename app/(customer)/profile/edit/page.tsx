@@ -4,7 +4,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import Footer from "@/components/shared/OREV1-011-Footer";
+import Footer from "@/components/shared/OREV1-011-Footer"; import { safeNext } from "@/lib/safeNext";
 import ProfileCompletionBar from "@/components/shared/OREV1-025-ProfileCompletionBar";
 import ProfileFormTop from "@/components/shared/OREV1-015B-ProfileFormTop";
 import ProfileFormBottom from "@/components/shared/OREV1-015C-ProfileFormBottom";
@@ -188,7 +188,7 @@ export default function ProfileEditPage() {
       if (!res.ok) { setLoading(false); showToast("error", data.error || "Failed to save profile. Please try again."); return; }
       sessionStorage.removeItem(DRAFT_KEY); setIsDirty(false); setHasDraft(false);
       setLoading(false); showToast("success", "Profile saved successfully!");
-      setTimeout(() => window.location.href = "/profiles", 1500);
+      setTimeout(() => { window.location.href = safeNext(new URLSearchParams(window.location.search).get("next")) || "/profiles"; }, 1500);
     } catch { setLoading(false); showToast("error", "Something went wrong. Please try again."); }
   };
 

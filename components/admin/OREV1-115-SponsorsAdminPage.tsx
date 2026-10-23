@@ -10,7 +10,7 @@ import OREV1115CSponsorsMobileCards from '@/components/admin/OREV1-115C-Sponsors
 import OREV1117AdminAddSponsorModal from '@/components/admin/OREV1-117-AdminAddSponsorModal'
 import OREV1118SponsorsToolbar from '@/components/admin/OREV1-118-SponsorsToolbar'
 
-type SponsorRow = { id: string; name: string; logo_url: string | null; status: string; is_enabled: boolean; created_at: string }
+type SponsorRow = { id: string; name: string; logo_url: string | null; status: string; is_enabled: boolean; created_at: string; pending_logo_url?: string | null }
 const API = '/admin/sponsors/api'
 const STATUS_LABELS: Record<string, string> = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' }
 const STATUS_COLORS: Record<string, string> = { pending: 'bg-yellow-100 text-yellow-700', approved: 'bg-green-100 text-green-700', rejected: 'bg-red-200 text-red-800' }
@@ -48,13 +48,13 @@ export default function OREV1115SponsorsAdminPage({ backLink = '/admin/ecosystem
   const handleApprove = async (r: SponsorRow) => {
     const res = await fetch(API, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, status: 'approved' }) })
     if (!res.ok) { toast.error('Failed'); return }
-    toast.success('Sponsor approved'); setRows(rows => rows.map(x => x.id === r.id ? { ...x, status: 'approved' } : x))
+    toast.success(r.pending_logo_url ? 'Logo update approved' : 'Sponsor approved'); if (r.pending_logo_url) fetchData(); else setRows(rows => rows.map(x => x.id === r.id ? { ...x, status: 'approved' } : x))
   }
   const handleReject = async (reasonId: string | null, note: string) => {
     if (!reasonTarget) return
     const res = await fetch(API, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: reasonTarget.id, status: 'rejected', reason_id: reasonId, reason_note: note }) })
     if (!res.ok) { toast.error('Failed'); setReasonTarget(null); return }
-    toast.success('Sponsor rejected'); setRows(rows => rows.map(x => x.id === reasonTarget.id ? { ...x, status: 'rejected' } : x)); setReasonTarget(null)
+    toast.success(reasonTarget.pending_logo_url ? 'Logo update rejected' : 'Sponsor rejected'); if (reasonTarget.pending_logo_url) fetchData(); else setRows(rows => rows.map(x => x.id === reasonTarget.id ? { ...x, status: 'rejected' } : x)); setReasonTarget(null)
   }
   const handleToggleEnabled = async (r: SponsorRow) => {
     const res = await fetch(API, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, is_enabled: !r.is_enabled }) })

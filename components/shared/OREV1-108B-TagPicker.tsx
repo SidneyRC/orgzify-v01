@@ -1,4 +1,4 @@
-// THIS FILE GOES IN: components/shared/OREV1-108B-TagPicker.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-108B-TagPicker.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 
@@ -12,6 +12,7 @@ export default function OREV1108BTagPicker({ eventId, locked, theme, value, onCh
   const [max, setMax] = useState(3)
   const radius = theme?.global_border_radius || '12px'
   const inputStyle = { backgroundColor: theme?.input_bg || '#fff', border: `1px solid ${theme?.input_border || '#e5e7eb'}`, borderRadius: radius }
+  const chipActive = { backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff' }
 
   useEffect(() => {
     fetch(`${API}?type=tag_settings`).then(r => r.json()).then(j => setMax(j.max || 3))
@@ -46,30 +47,34 @@ export default function OREV1108BTagPicker({ eventId, locked, theme, value, onCh
     <div className="flex flex-col gap-1">
       <label className="text-xs text-gray-500">Tags <span className="text-red-500">*</span></label>
 
-      <div className="flex flex-wrap gap-2 mb-1">
-        {value.map(t => (
-          <span key={t.id} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full" style={{ backgroundColor: theme?.badge_success_bg || '#eff6ff', color: theme?.color_text_primary || '#111827' }}>
-            {t.name}
-            {!locked && <button type="button" onClick={() => removeTag(t.id)} className="text-xs opacity-60 hover:opacity-100">✕</button>}
-          </span>
-        ))}
-      </div>
-
-      {!locked && !atMax && (
-        <div className="relative">
-          <input value={q} onChange={e => runSearch(e.target.value)} placeholder="Search tags..." className="h-10 px-3 text-sm w-full focus:outline-none" style={inputStyle} />
-          {q.trim() && (
-            <div className="absolute z-10 mt-1 w-full border border-gray-100 rounded-xl bg-white max-h-40 overflow-y-auto shadow-sm">
-              {results.map(t => (
-                <button key={t.id} type="button" onClick={() => addTag(t)} className="w-full text-left text-sm px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0">
-                  {t.name}
-                </button>
-              ))}
-              {results.length === 0 && <p className="text-xs px-3 py-2" style={{ color: theme?.color_text_muted || '#9ca3af' }}>No matching tags</p>}
-            </div>
+      <div className="relative">
+                <div className="orgz-picker-box flex flex-wrap items-center gap-1.5 px-2 py-1.5 min-h-[40px]" style={inputStyle}>
+          {value.map(t => (
+            <span key={t.id} style={chipActive} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5">
+              {t.name}
+              {!locked && <button type="button" onClick={() => removeTag(t.id)} className="hover:opacity-70">✕</button>}
+            </span>
+          ))}
+          {!locked && !atMax && (
+            <input
+              value={q}
+              onChange={e => runSearch(e.target.value)}
+              placeholder={value.length === 0 ? 'Search tags…' : ''}
+                            className="orgz-picker-input flex-1 min-w-[100px] text-sm bg-transparent px-1 border-0 ring-0 focus:ring-0 shadow-none"
+            />
           )}
         </div>
-      )}
+        {!locked && q.trim() && (
+          <div className="absolute z-10 mt-1 w-full border border-gray-100 rounded-xl bg-white max-h-40 overflow-y-auto shadow-sm">
+            {results.map(t => (
+              <button key={t.id} type="button" onClick={() => addTag(t)} className="w-full text-left text-sm px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+                {t.name}
+              </button>
+            ))}
+            {results.length === 0 && <p className="text-xs px-3 py-2" style={{ color: theme?.color_text_muted || '#9ca3af' }}>No matching tags</p>}
+          </div>
+        )}
+      </div>
 
       {atMax && !locked && <span className="text-xs" style={{ color: theme?.color_text_muted || '#9ca3af' }}>Maximum {max} tags</span>}
       {error && <span className="text-xs text-red-500">{error}</span>}

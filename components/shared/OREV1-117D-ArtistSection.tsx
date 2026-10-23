@@ -1,11 +1,11 @@
-// THIS FILE GOES IN: components/shared/OREV1-117D-ArtistSection.tsx (NEW FILE)
+// THIS FILE GOES IN: components/shared/OREV1-117D-ArtistSection.tsx (REPLACES existing file)
 'use client'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import OREV1117BArtistSearchAdd from '@/components/shared/OREV1-117B-ArtistSearchAdd'
 const ARTISTS_API = '/biz/events/artists/api'
 type EventArtist = { id: string; artists: { id: string; name: string; photo_url: string | null } }
-type Props = { eventId: string; locked: boolean; theme: any }
+type Props = { eventId: string; locked: boolean; theme: any; onChange: () => void }
 
 function ArtistTile({ ea, locked, onRemove }: { ea: EventArtist; locked: boolean; onRemove: (id: string) => void }) {
   return (
@@ -17,7 +17,7 @@ function ArtistTile({ ea, locked, onRemove }: { ea: EventArtist; locked: boolean
   )
 }
 
-export default function OREV1117DArtistSection({ eventId, locked, theme }: Props) {
+export default function OREV1117DArtistSection({ eventId, locked, theme, onChange }: Props) {
   const [artists, setArtists] = useState<EventArtist[]>([])
   const loadArtists = () => fetch(`${ARTISTS_API}?event_id=${eventId}`).then(r => r.json()).then(j => setArtists(j.data || []))
   useEffect(() => { if (eventId) loadArtists() }, [eventId])
@@ -26,19 +26,19 @@ export default function OREV1117DArtistSection({ eventId, locked, theme }: Props
     const res = await fetch(ARTISTS_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'assign', event_id: eventId, artist_id: artist.id }) })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error || 'Failed'); return }
-    toast.success('Artist added'); loadArtists()
+    toast.success('Artist added'); onChange(); loadArtists()
   }
-  const handleRemove = async (id: string) => { await fetch(`${ARTISTS_API}?id=${id}`, { method: 'DELETE' }); loadArtists() }
+  const handleRemove = async (id: string) => { await fetch(`${ARTISTS_API}?id=${id}`, { method: 'DELETE' }); onChange(); loadArtists() }
 
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Artists (optional)</h3>
+      <h3 className="text-lg font-semibold mb-3" style={{ color: theme?.color_text_primary || '#111827' }}>Artists (optional)</h3>
       {artists.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
           {artists.map(ea => <ArtistTile key={ea.id} ea={ea} locked={locked} onRemove={handleRemove} />)}
         </div>
       )}
-      {!locked && <OREV1117BArtistSearchAdd locked={locked} theme={theme} onAssign={handleAssign} />}
+      {!locked && <OREV1117BArtistSearchAdd locked={locked} theme={theme} onAssign={handleAssign} existingArtists={artists.map(ea => ea.artists)} />}
     </div>
   )
 }

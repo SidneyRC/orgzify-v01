@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
+import Link from "next/link"; import { safeNext } from "@/lib/safeNext";
 
 type LoginMethod = "password" | "otp";
 
@@ -66,7 +66,7 @@ export default function LoginPage() {
     setLoading(false);
     if (!res.ok) { setError(data.error || 'Invalid OTP. Please try again.'); return; }
     const next = new URLSearchParams(window.location.search).get('next');
-    window.location.href = next ? decodeURIComponent(next) : (data.is_complete ? '/' : '/profile/edit');
+    window.location.href = safeNext(next) ? decodeURIComponent(next as string) : (data.is_complete ? '/' : '/profile/edit');
   };
 
   const handleOtpPaste = async (e: React.ClipboardEvent) => {
@@ -107,7 +107,7 @@ export default function LoginPage() {
       setLoading(false);
       if (!res.ok) { setError(data.error || 'Something went wrong. Please try again.'); return; }
       const next = new URLSearchParams(window.location.search).get('next');
-      window.location.href = next ? decodeURIComponent(next) : (data.is_complete ? '/' : '/profile/edit');
+      window.location.href = safeNext(next) ? decodeURIComponent(next as string) : (data.is_complete ? '/' : '/profile/edit');
     } else {
       await submitOtp(otp.join(''));
     }
@@ -125,7 +125,7 @@ export default function LoginPage() {
 
             {/* Social Login */}
             <div className="flex flex-col gap-3 mb-6">
-              <button type="button" onClick={() => window.location.href = '/google/api'} className="flex items-center justify-center gap-3 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              <button type="button" onClick={() => { const n = new URLSearchParams(window.location.search).get("next"); window.location.href = n ? "/google/api?next=" + encodeURIComponent(n) : "/google/api"; }} className="flex items-center justify-center gap-3 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -240,7 +240,7 @@ export default function LoginPage() {
             </p>
             <p className="text-center text-sm text-gray-500 mt-4">
               Don&apos;t have an account?{" "}
-              <Link href="/register" className="text-blue-900 font-semibold hover:underline">Register</Link>
+              <Link href="/register" onClick={(e) => { const n = new URLSearchParams(window.location.search).get("next"); if (n) { e.preventDefault(); window.location.href = "/register?next=" + encodeURIComponent(n); } }} className="text-blue-900 font-semibold hover:underline">Register</Link>
             </p>
           </div>
         </div>

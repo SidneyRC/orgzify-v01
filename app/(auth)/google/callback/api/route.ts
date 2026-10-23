@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
-import { uploadGooglePhoto } from '@/lib/googlePhotoUpload';
+import { uploadGooglePhoto } from '@/lib/googlePhotoUpload'; import { nextZyNumber } from '@/lib/nextZyNumber'; import { GOOGLE_NEXT_COOKIE, readGoogleNext } from '@/lib/googleNext';
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
 
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     } else {
 
       const { count } = await supabase.from('users').select('*', { count: 'exact', head: true });
-      const zy_id = `ZY${String((count || 0) + 1).padStart(3, '0')}`;
+      const zy_id = `ZY${String(await nextZyNumber()).padStart(3, '0')}`;
 
             const { data: newUser, error: userError } = await supabase
         .from('users')
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
         .select('id, account_status, is_super_admin')
         .single();
 
-      if (userError || !newUser) return NextResponse.redirect(`${origin}/login?error=google_failed`);
+      if (userError) console.error('Google user insert error:', userError.message); if (userError || !newUser) return NextResponse.redirect(`${origin}/login?error=google_failed`);
       user = newUser;
 
             const { data: newP2 } = await supabase.from('profiles').insert({
@@ -122,11 +122,11 @@ export async function GET(req: NextRequest) {
       path: '/',
     };
 
-    const redirectPath = profile?.is_complete ? '/' : '/profile/edit';
+    const back = readGoogleNext(req.cookies.get(GOOGLE_NEXT_COOKIE)?.value); const redirectPath = profile?.is_complete ? (back || '/') : (back ? '/profile/edit?next=' + encodeURIComponent(back) : '/profile/edit');
     const response = NextResponse.redirect(`${origin}${redirectPath}`);
     response.cookies.set('orgzify_token', token, { ...cookieOptions, httpOnly: true });
     response.cookies.set('zy_display', firstName, cookieOptions);
-    response.cookies.set('zy_avatar', avatar, cookieOptions);
+    response.cookies.set('zy_avatar', avatar, cookieOptions); response.cookies.delete(GOOGLE_NEXT_COOKIE);
     return response;
 
   } catch (err) {

@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getLiveCities } from "@/lib/getLiveCityIds";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371;
@@ -13,6 +14,8 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Live cities ordered by distance. "Live" = shared rule (lib/isEventLive.ts) + a session still open,
+// through lib/getLiveCityIds.ts. A virtual-only city has no map position, so it is not placed here.
 export async function POST(req: Request) {
   try {
     const { lat, lng } = await req.json();
@@ -20,21 +23,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing coordinates" }, { status: 400 });
     }
 
-    const { data: liveEvents, error: evErr } = await supabaseAdmin
-      .from("events")
-      .select("id")
-      .eq("status", "active")
-      .eq("visibility", "public")
-      .neq("event_status", "cancelled");
-
-    if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 });
-    const eventIds = (liveEvents ?? []).map(e => e.id);
-    if (eventIds.length === 0) return NextResponse.json({ orderedCityIds: [] });
+    const { eventVenueIds } = await getLiveCities();
+    if (eventVenueIds.length === 0) return NextResponse.json({ orderedCityIds: [] });
 
     const { data: eventVenues, error: evVenueErr } = await supabaseAdmin
       .from("event_venues")
       .select("venue_id")
-      .in("event_id", eventIds);
+      .in("id", eventVenueIds);
 
     if (evVenueErr) return NextResponse.json({ error: evVenueErr.message }, { status: 500 });
     const venueIds = [...new Set((eventVenues ?? []).map(r => r.venue_id))];

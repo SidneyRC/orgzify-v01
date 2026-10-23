@@ -73,7 +73,7 @@ export default function OREV1114EventStepTicketCategories({ eventId, locked, dur
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-700">Ticket categories</p>
+        <p className="text-lg font-semibold" style={{ color: theme?.color_text_primary || '#111827' }}>Ticket categories</p>
         {!locked && !creating && !editState && <button onClick={openNew} style={{ backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: theme?.global_border_radius || '12px' }} className="text-sm px-4 py-2">+ Add ticket</button>}
       </div>
       {!creating && !editState && (

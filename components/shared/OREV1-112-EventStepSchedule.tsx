@@ -1,8 +1,8 @@
 // THIS FILE GOES IN: components/shared/OREV1-112-EventStepSchedule.tsx (REPLACES existing file)
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
-import OREV1112BVenueDateTime from '@/components/shared/OREV1-112B-VenueDateTime'
+import OREV1112BVenueDateTime, { VenueDateTimeHandle } from '@/components/shared/OREV1-112B-VenueDateTime'
 
 const VENUE_API = '/biz/events/eventvenue/api'
 const SCHEDULE_API = '/biz/events/eventvenue/schedule/api'
@@ -14,15 +14,17 @@ export default function OREV1112EventStepSchedule({ eventId, eventFormat, durati
   const radius = theme?.global_border_radius || '12px'
   const primaryBtn = { backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderRadius: radius }
   const outlineBtn = { backgroundColor: theme?.btn_outline_bg || '#fff', color: theme?.btn_outline_text || '#4b5563', border: `1px solid ${theme?.btn_outline_border || '#e5e7eb'}`, borderRadius: radius }
+  const isVirtual = eventFormat === 'virtual'
 
   const [eventVenues, setEventVenues] = useState<EventVenue[]>([])
   const [loading, setLoading] = useState(true)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState('')
+  const refs = useRef<Record<string, VenueDateTimeHandle | null>>({})
 
   useEffect(() => {
     const init = async () => {
-      if (eventFormat === 'virtual') {
+      if (isVirtual) {
         await fetch(VENUE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ensure_virtual', event_id: eventId }) })
       }
       const res = await fetch(`${VENUE_API}?event_id=${eventId}`)
@@ -35,6 +37,9 @@ export default function OREV1112EventStepSchedule({ eventId, eventFormat, durati
 
   const handleContinue = async () => {
     setChecking(true); setError('')
+    // Saves any changed Access Link/Password across every session first, same
+    // "save on Continue" pattern used in Event Info, Media and Booking Method.
+    await Promise.all(Object.values(refs.current).map(r => r?.saveAccessChanges()))
     const results = await Promise.all(eventVenues.map(ev => fetch(`${SCHEDULE_API}?event_venue_id=${ev.id}`).then(r => r.json())))
     const anyEmpty = results.some(json => (json.data || []).reduce((sum: number, d: any) => sum + d.event_venue_times.length, 0) === 0)
     if (anyEmpty) { setError('Every venue needs at least one date/time session before you can continue.'); setChecking(false); return }
@@ -49,17 +54,21 @@ export default function OREV1112EventStepSchedule({ eventId, eventFormat, durati
       {locked && <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-xs text-yellow-700">This event is awaiting Admin review and can't be edited right now.</div>}
       <div>
         <h2 className="text-lg font-semibold mb-1" style={{ color: theme?.color_text_primary || '#111827' }}>Date &amp; Time</h2>
-        <p className="text-sm" style={{ color: theme?.color_text_muted || '#9ca3af' }}>Add one or more date/time sessions for each venue.</p>
+        <p className="text-sm" style={{ color: theme?.color_text_muted || '#9ca3af' }}>
+          {isVirtual ? 'Add one or more sessions, with an access link and password for each.' : 'Add one or more date/time sessions for each venue.'}
+        </p>
       </div>
 
       <div className="flex flex-col gap-4">
         {eventVenues.map(ev => (
           <OREV1112BVenueDateTime
             key={ev.id}
+            ref={el => { refs.current[ev.id] = el }}
             eventVenueId={ev.id}
-            venueName={eventFormat === 'virtual' ? 'Virtual Event' : (ev.venue?.external_name || 'Venue')}
+            venueName={isVirtual ? 'Virtual Event' : (ev.venue?.external_name || 'Venue')}
             durationMinutes={durationMinutes}
             locked={locked}
+            isVirtual={isVirtual}
           />
         ))}
       </div>

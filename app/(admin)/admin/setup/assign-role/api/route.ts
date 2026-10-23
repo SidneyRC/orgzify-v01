@@ -1,18 +1,33 @@
+// GOES IN: app/(admin)/admin/setup/assign-role/api/route.ts (REPLACES existing file)
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSession } from '@/lib/auth'
+import { getDownlineIds, getScopedCompanyIds } from '@/lib/companyScope'
+import { hasModuleRight } from '@/lib/adminModuleRights'
 
 const MASTER_COMPANY_ID = '11111111-1111-1111-1111-111111111111'
+const SUPER_ADMIN_ROLE_ID = 'd48c4a41-701b-4f70-bcbe-d92020808c00'
 
-async function getDownlineIds(rootId: string) {
-  const ids = [rootId]; let frontier = [rootId]
-  while (frontier.length) {
-    const { data } = await supabaseAdmin.from('companies').select('id').in('parent_company_id', frontier)
-    const next = (data || []).map(r => r.id).filter(id => !ids.includes(id))
-    if (!next.length) break
-    ids.push(...next); frontier = next
-  }
-  return ids
+const denied = () => NextResponse.json({ error: 'Not allowed' }, { status: 403 })
+
+async function scopedCompanyIds(req: NextRequest, session: any) {
+  const rawContext = decodeURIComponent(req.cookies.get('orgzify_context')?.value || '')
+  const [ctxType, ctxId] = rawContext.split(':')
+  const processId = ctxType === 'company' ? ctxId : undefined
+  return getScopedCompanyIds(session, { processId, module: 'assign_roles' })
+}
+
+// One check per request. A Super Admin passes with no database read; others need ONE of these rights on the Assign Roles module.
+async function can(req: NextRequest, session: any, ...rights: string[]) {
+  for (const r of rights) if (await hasModuleRight(req, session, 'assign_roles', r)) return true
+  return false
+}
+
+// The company must be inside the person's own scope (a Super Admin may use any company).
+async function inScope(req: NextRequest, session: any, companyId: string | null) {
+  if (session.is_super_admin) return true
+  const ids = await scopedCompanyIds(req, session)
+  return !ids || (!!companyId && ids.includes(companyId))
 }
 
 async function resolveRoles(companyId: string) {
@@ -32,15 +47,32 @@ async function resolveRoles(companyId: string) {
   return []
 }
 
+// The Super Admin role can never be given by anyone else; other roles must be ones offered for that company.
+async function roleAllowed(session: any, companyId: string, roleId: string) {
+  if (session.is_super_admin) return true
+  if (roleId === SUPER_ADMIN_ROLE_ID) return false
+  return (await resolveRoles(companyId)).some((r: any) => r.id === roleId)
+}
+
+// Exact match only (no wildcards), so the search cannot be used to list people.
+async function findPerson(q: string) {
+  const byEmail = supabaseAdmin.from('users').select('id, email').eq('email', q.toLowerCase()).limit(1).maybeSingle()
+  const byPhone = supabaseAdmin.from('users').select('id, email').eq('phone', q).limit(1).maybeSingle()
+  const byZy = /^[A-Za-z0-9]+$/.test(q) ? supabaseAdmin.from('users').select('id, email').ilike('zy_id', q).limit(1).maybeSingle() : Promise.resolve({ data: null })
+  const hits = await Promise.all([byEmail, byPhone, byZy])
+  return hits.map(h => h.data).find(Boolean) as { id: string; email: string } | undefined
+}
+
 export async function GET(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Please log in again.' }, { status: 401 })
   const type = req.nextUrl.searchParams.get('type')
 
   if (type === 'search_person') {
+    if (!(await can(req, session, 'can_create'))) return denied()
     const q = (req.nextUrl.searchParams.get('q') || '').trim()
     if (!q) return NextResponse.json({ data: null })
-    const { data: user } = await supabaseAdmin.from('users').select('id, email').or(`email.ilike.${q},phone.ilike.${q},zy_id.ilike.${q}`).maybeSingle()
+    const user = await findPerson(q)
     if (!user) return NextResponse.json({ data: null })
     const { data: profile } = await supabaseAdmin.from('profiles').select('full_name').eq('user_id', user.id).ilike('relationship', 'self').maybeSingle()
     return NextResponse.json({ data: { id: user.id, email: user.email, full_name: profile?.full_name || user.email } })
@@ -60,7 +92,7 @@ export async function GET(req: NextRequest) {
 
   if (type === 'roles') {
     const companyId = req.nextUrl.searchParams.get('company_id')
-    if (!companyId) return NextResponse.json({ data: [] })
+    if (!companyId || !(await inScope(req, session, companyId))) return NextResponse.json({ data: [] })
     const data = await resolveRoles(companyId)
     return NextResponse.json({ data })
   }
@@ -72,8 +104,9 @@ export async function GET(req: NextRequest) {
   const roleFilter = req.nextUrl.searchParams.get('role_id') || ''
   const statusFilter = req.nextUrl.searchParams.get('status') || ''
   const search = req.nextUrl.searchParams.get('search') || ''
+  const scopedIds = await scopedCompanyIds(req, session)
 
-let matchedUserIds: string[] = []
+  let matchedUserIds: string[] = []
   let matchedCompanyIds: string[] = []
   if (search) {
     const { data: byEmail } = await supabaseAdmin.from('users').select('id').ilike('email', `%${search}%`)
@@ -85,6 +118,7 @@ let matchedUserIds: string[] = []
   }
 
   let query = supabaseAdmin.from('user_roles').select('id, user_id, company_id, role_id, is_active, users!user_roles_user_id_fkey(email), companies(display_name), admin_roles(name)', { count: 'exact' })
+  if (scopedIds) query = query.in('company_id', scopedIds)
   if (companyFilter) query = query.eq('company_id', companyFilter)
   if (roleFilter) query = query.eq('role_id', roleFilter)
   if (statusFilter) query = query.eq('is_active', statusFilter === 'active')
@@ -113,17 +147,19 @@ let matchedUserIds: string[] = []
 export async function POST(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Please log in again.' }, { status: 401 })
+  if (!(await can(req, session, 'can_create'))) return denied()
   const { user_ids, company_id, role_id } = await req.json()
   if (!company_id) return NextResponse.json({ error: 'Company is required.' }, { status: 400 })
   if (!role_id) return NextResponse.json({ error: 'Role is required.' }, { status: 400 })
   if (!Array.isArray(user_ids) || !user_ids.length) return NextResponse.json({ error: 'Select at least one person.' }, { status: 400 })
+  if (!(await inScope(req, session, company_id)) || !(await roleAllowed(session, company_id, role_id))) return denied()
 
   const { data: existing } = await supabaseAdmin.from('user_roles').select('user_id').eq('company_id', company_id).eq('role_id', role_id).in('user_id', user_ids)
   const existingIds = new Set((existing || []).map((r: any) => r.user_id))
   const toInsert = user_ids.filter((id: string) => !existingIds.has(id)).map((id: string) => ({ user_id: id, company_id, role_id, assigned_by: session.user_id, created_by: session.user_id, is_active: true }))
   if (!toInsert.length) return NextResponse.json({ error: 'These people already have this role.' }, { status: 400 })
 
-const { error } = await supabaseAdmin.from('user_roles').insert(toInsert)
+  const { error } = await supabaseAdmin.from('user_roles').insert(toInsert)
   if (error) {
     if (error.code === '23505') return NextResponse.json({ error: 'One or more of these people already have this role.' }, { status: 400 })
     return NextResponse.json({ error: 'Could not assign the role. Please try again.' }, { status: 500 })
@@ -134,13 +170,21 @@ const { error } = await supabaseAdmin.from('user_roles').insert(toInsert)
 export async function PATCH(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Please log in again.' }, { status: 401 })
+  if (!(await can(req, session, 'can_edit'))) return denied()
   const { id, is_active, company_id, role_id } = await req.json()
   if (!id) return NextResponse.json({ error: 'Record is missing.' }, { status: 400 })
+
+  const { data: row } = await supabaseAdmin.from('user_roles').select('company_id').eq('id', id).maybeSingle()
+  if (!row || !(await inScope(req, session, row.company_id))) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+  const targetCompany = company_id || row.company_id
+  if (company_id && !(await inScope(req, session, company_id))) return denied()
+  if (role_id && !(await roleAllowed(session, targetCompany, role_id))) return denied()
+
   const fields: any = { updated_at: new Date().toISOString() }
   if (typeof is_active === 'boolean') fields.is_active = is_active
   if (company_id) fields.company_id = company_id
   if (role_id) fields.role_id = role_id
-const { error } = await supabaseAdmin.from('user_roles').update(fields).eq('id', id)
+  const { error } = await supabaseAdmin.from('user_roles').update(fields).eq('id', id)
   if (error) {
     if (error.code === '23505') return NextResponse.json({ error: 'This person already has this role for that company.' }, { status: 400 })
     return NextResponse.json({ error: 'Could not update. Please try again.' }, { status: 500 })

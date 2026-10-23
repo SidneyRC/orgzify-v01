@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useTheme } from '@/lib/ThemeContext'
 import toast from 'react-hot-toast'
 import OREV1107BLanguagePicker from '@/components/shared/OREV1-107B-LanguagePicker'
+import OREV1107CSubCategoryPicker from '@/components/shared/OREV1-107C-SubCategoryPicker'
 import type { EventDraft } from '@/components/shared/OREV1-100-EventRegistration'
 
 const API = '/biz/events/api'
@@ -15,6 +16,11 @@ const VISIBILITY_OPTS = [
   { value: 'private', label: 'Private', note: 'Hidden from public listings — visible only to people with the direct link.' },
 ]
 
+const sameSet = (a: string[], b: string[]) => {
+  const x = [...a].sort(), y = [...b].sort()
+  return x.length === y.length && x.every((v, i) => v === y[i])
+}
+
 export default function OREV1107EventStepInfo({ event, entityId, eventFormat, locked, onSaved, onBack, onClose }: Props) {
   const { theme } = useTheme()
   const radius = theme?.global_border_radius || '12px'
@@ -23,17 +29,37 @@ export default function OREV1107EventStepInfo({ event, entityId, eventFormat, lo
   const outlineBtn = { backgroundColor: theme?.btn_outline_bg || '#fff', color: theme?.btn_outline_text || '#4b5563', border: `1px solid ${theme?.btn_outline_border || '#e5e7eb'}`, borderRadius: radius }
   const activeCard = { borderColor: theme?.btn_bg || '#1e3a8a', backgroundColor: theme?.badge_success_bg || '#eff6ff', borderRadius: radius }
   const inactiveCard = { borderColor: theme?.input_border || '#e5e7eb', backgroundColor: theme?.input_bg || '#fff', borderRadius: radius }
+  const chipActive = { backgroundColor: theme?.btn_bg || '#1e3a8a', color: theme?.btn_text || '#fff', borderColor: theme?.btn_bg || '#1e3a8a' }
+  const chipInactive = { backgroundColor: theme?.input_bg || '#fff', color: theme?.btn_outline_text || '#4b5563', borderColor: theme?.input_border || '#e5e7eb' }
 
   const [categories, setCategories] = useState<Category[]>([])
   const [name, setName] = useState(event?.name || '')
   const [categoryId, setCategoryId] = useState(event?.category_id || '')
-  const [subCategoryId, setSubCategoryId] = useState(event?.sub_category_id || '')
+  const [subCategoryIds, setSubCategoryIds] = useState<string[]>([])
   const [languages, setLanguages] = useState<string[]>((event as any)?.languages || [])
   const [visibility, setVisibility] = useState(event?.visibility || 'public')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
+  // Snapshot of original values, used to detect what actually changed on Save
+  const [original, setOriginal] = useState({
+    name: event?.name || '',
+    categoryId: event?.category_id || '',
+    subCategoryIds: [] as string[],
+    languages: (event as any)?.languages || [],
+    visibility: event?.visibility || 'public',
+  })
+
   useEffect(() => { fetch(`${API}?type=categories`).then(r => r.json()).then(j => setCategories(j.data || [])) }, [])
+  useEffect(() => {
+    if (!event?.id) return
+    fetch(`${API}?type=event_sub_categories&event_id=${event.id}`).then(r => r.json()).then(j => {
+      const ids = j.data || []
+      setSubCategoryIds(ids)
+      setOriginal(o => ({ ...o, subCategoryIds: ids }))
+    })
+  }, [event?.id])
+
   const topCategories = categories.filter(c => c.level === 1)
   const subCategories = categories.filter(c => c.level === 2 && c.parent_id === categoryId)
 
@@ -53,13 +79,29 @@ export default function OREV1107EventStepInfo({ event, entityId, eventFormat, lo
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'save_step2_info', id: event?.id, entity_id: entityId, event_format: eventFormat,
-        name: name.trim(), category_id: categoryId || null, sub_category_id: subCategoryId || null, languages, visibility
+        name: name.trim(), category_id: categoryId || null, sub_category_ids: subCategoryIds, languages, visibility
       })
     })
     const json = await res.json()
     setSaving(false)
     if (json.error) { toast.error(json.error); return }
-    toast.success(event ? (event.status === 'active' ? 'Changes sent for re-verification' : 'Saved') : 'Saved')
+
+    const isNewEvent = !event?.id
+    const liveChanged = visibility !== original.visibility || !sameSet(languages, original.languages)
+    const draftChanged = name.trim() !== original.name || categoryId !== original.categoryId || !sameSet(subCategoryIds, original.subCategoryIds)
+
+    if (isNewEvent) {
+      toast.success('Saved to draft')
+    } else if (liveChanged && draftChanged) {
+      toast.success('Updated — now live. Other changes saved to draft.')
+    } else if (liveChanged) {
+      toast.success('Updated — now live')
+    } else if (draftChanged) {
+      toast.success('Saved to draft')
+    }
+    // else: nothing changed — no toast
+
+    setOriginal({ name: name.trim(), categoryId, subCategoryIds, languages, visibility })
     onSaved(json.data)
   }
 
@@ -78,27 +120,23 @@ export default function OREV1107EventStepInfo({ event, entityId, eventFormat, lo
           {errors.name && <span className="text-xs text-red-500">{errors.name}</span>}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Category <span className="text-red-500">*</span></label>
-            <select value={categoryId} onChange={e => { setCategoryId(e.target.value); setSubCategoryId('') }} className="h-10 px-3 text-sm focus:outline-none" style={inputStyle}>
-              <option value="">Select category</option>
-              {topCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {errors.category && <span className="text-xs text-red-500">{errors.category}</span>}
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Sub-category</label>
-            <select value={subCategoryId} onChange={e => setSubCategoryId(e.target.value)} disabled={!categoryId} className="h-10 px-3 text-sm focus:outline-none disabled:opacity-50" style={inputStyle}>
-              <option value="">Select sub-category</option>
-              {subCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500">Category <span className="text-red-500">*</span></label>
+          <select value={categoryId} onChange={e => { setCategoryId(e.target.value); setSubCategoryIds([]) }} className="h-10 px-3 text-sm focus:outline-none" style={inputStyle}>
+            <option value="">Select category</option>
+            {topCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {errors.category && <span className="text-xs text-red-500">{errors.category}</span>}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500">Sub-category</label>
+                  <OREV1107CSubCategoryPicker categoryId={categoryId} subCategories={subCategories} value={subCategoryIds} onChange={setSubCategoryIds} chipActive={chipActive} chipInactive={chipInactive} inputStyle={inputStyle} />
         </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-xs text-gray-500">Language(s) <span className="text-red-500">*</span></label>
-          <OREV1107BLanguagePicker value={languages} onChange={setLanguages} inputStyle={inputStyle} />
+                    <OREV1107BLanguagePicker value={languages} onChange={setLanguages} inputStyle={inputStyle} chipActive={chipActive} />
           {errors.languages && <span className="text-xs text-red-500">{errors.languages}</span>}
         </div>
 

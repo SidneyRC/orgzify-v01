@@ -83,7 +83,7 @@ html, body {
 
 /* ── Focus Ring — global consistent style ── */
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--theme-focus-ring, var(--color-primary));
   outline-offset: 2px;
 }
 
@@ -106,3 +106,14 @@ html, body {
    Then use: font-family: 'Playfair Display', serif;
    in that page's component — no global override needed.
    ──────────────────────────────────────── */
+
+   
+/* ── Multi-select picker (tags-in-box) — focus ring on whole box, not inner input ── */
+.orgz-picker-box:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+.orgz-picker-input:focus-visible {
+  outline: none !important;
+}

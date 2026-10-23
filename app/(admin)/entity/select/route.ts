@@ -1,6 +1,8 @@
+// THIS FILE GOES IN: app/(admin)/entity/select/route.ts (REPLACES existing file)
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSession } from '@/lib/auth'
+import { mayWorkAsBusiness } from '@/lib/eventAccess'
 
 export async function POST(req: NextRequest) {
   const session = await getSession(req)
@@ -8,6 +10,9 @@ export async function POST(req: NextRequest) {
 
   const { entity_id } = await req.json()
   if (!entity_id) return NextResponse.json({ error: 'entity_id required' }, { status: 400 })
+
+  // Only the owner of a business (or a Super Admin) can work as it. Anyone else is told it was not found.
+  if (!(await mayWorkAsBusiness(session, entity_id))) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
 
   const { data: entity } = await supabaseAdmin
     .from('entities').select('process_id').eq('id', entity_id).maybeSingle()
