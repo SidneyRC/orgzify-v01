@@ -27,10 +27,6 @@ export default function OREV1115BReviewInfoSection({ event, onEditInfo, onEditAd
   const allSubIds = subIds.length > 0 ? subIds : (event.sub_category_id ? [event.sub_category_id] : [])
   const subNames = allSubIds.map(id => catName(id)).filter(Boolean).join(', ')
   const category = event.category_id ? catName(event.category_id) : ''
-  const social = [
-    ['Facebook', event.social_facebook_url], ['Instagram', event.social_instagram_url], ['X', event.social_x_url],
-    ['YouTube', event.social_youtube_url], ['Website', event.social_website_url]
-  ].filter(([, v]) => v)
 
   const infoRows = [
     ['Name', event.name], ['Category', category], ['Sub-category', subNames], ['Format', event.event_format], ['Visibility', event.visibility],

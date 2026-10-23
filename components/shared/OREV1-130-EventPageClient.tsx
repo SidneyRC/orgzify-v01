@@ -5,7 +5,6 @@ import { useTheme } from '@/lib/ThemeContext'
 import OREV1120EventHeroBanner from '@/components/shared/OREV1-120-EventHeroBanner'
 import OREV1136EventTitleShare from '@/components/shared/OREV1-136-EventTitleShare'
 import OREV1123EventAboutSection from '@/components/shared/OREV1-123-EventAboutSection'
-import OREV1134EventArtistsCarousel from '@/components/shared/OREV1-134-EventArtistsCarousel'
 import OREV1135EventTermsSection from '@/components/shared/OREV1-135-EventTermsSection'
 import OREV1121EventGallery from '@/components/shared/OREV1-121-EventGallery'
 import OREV1133EventOrganiserSponsors from '@/components/shared/OREV1-133-EventOrganiserSponsors'
@@ -73,7 +72,6 @@ export default function OREV1130EventPageClient({ event, isLoggedIn, initialInte
             />
           </div>
           <OREV1123EventAboutSection description={event.description} />
-          <OREV1134EventArtistsCarousel artists={event.artists} />
           <OREV1135EventTermsSection terms={event.terms_conditions} />
           <OREV1121EventGallery gallery={event.gallery} />
           <OREV1133EventOrganiserSponsors organiser={{ name: event.organiser_name, logo_url: event.organiser_logo_url }} sponsors={event.sponsors} artists={event.artists} />

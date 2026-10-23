@@ -1,3 +1,4 @@
+// GOES IN: app/(admin)/admin/setup/companies/api/route.ts (REPLACES existing file)
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSession } from '@/lib/auth'
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: data || [], isSuperAdmin: false })
   }
 
-// Countries that have companies with addresses
+  // Countries that have companies with addresses
   if (searchParams.get('type') === 'all_countries') {
     const { data, error } = await supabaseAdmin
       .from('company_addresses').select('country_id, country_master(id, name)').not('country_id', 'is', null)
@@ -74,13 +75,13 @@ export async function GET(req: NextRequest) {
   if (scopedIds) query = query.in('id', scopedIds)
 
   const country = searchParams.get('country') || ''
-const company_type = searchParams.get('company_type') || ''
-const branch_type = searchParams.get('branch_type') || ''
-if (search) query = query.or(`legal_name.ilike.%${search}%,display_name.ilike.%${search}%,slug.ilike.%${search}%,process_id.ilike.%${search}%,company_code.ilike.%${search}%`)
-if (status) query = query.eq('company_status', status)
-if (country) query = query.eq('country_id', country)
-if (company_type) query = query.eq('company_type', company_type)
-if (branch_type) query = query.eq('branch_type', branch_type)
+  const company_type = searchParams.get('company_type') || ''
+  const branch_type = searchParams.get('branch_type') || ''
+  if (search) query = query.or(`legal_name.ilike.%${search}%,display_name.ilike.%${search}%,slug.ilike.%${search}%,process_id.ilike.%${search}%,company_code.ilike.%${search}%`)
+  if (status) query = query.eq('company_status', status)
+  if (country) query = query.eq('country_id', country)
+  if (company_type) query = query.eq('company_type', company_type)
+  if (branch_type) query = query.eq('branch_type', branch_type)
 
   const { data: rows, error, count } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -106,20 +107,30 @@ export async function PATCH(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   const body = await req.json()
   const { id, previous_status, ...fields } = body
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const activeCompanyId = await getActiveCompanyId(req.cookies)
 
-  if (activeCompanyId) {
+  // One check per request. A Super Admin passes with no extra database read.
+  // Everyone else needs the Edit right AND the company (and any new parent) inside their own scope.
+  if (!session.is_super_admin) {
+    const noEdit = () => NextResponse.json({ error: 'You do not have permission to edit companies' }, { status: 403 })
+    if (!activeCompanyId) return noEdit()
     const rights = await getFullCompanyRights(session.user_id, activeCompanyId)
-    if (!rights.companies?.can_edit) {
-      return NextResponse.json({ error: 'You do not have permission to edit companies' }, { status: 403 })
-    }
+    if (!rights.companies?.can_edit) return noEdit()
+    const rawContext = decodeURIComponent(req.cookies.get('orgzify_context')?.value || '')
+    const [ctxType, ctxId] = rawContext.split(':')
+    const scoped = await getScopedCompanyIds(session, { processId: ctxType === 'company' ? ctxId : undefined, module: 'companies' })
+    const inScope = (c: string | null) => !scoped || (!!c && scoped.includes(c))
+    if (!inScope(id) || (fields.parent_company_id && !inScope(fields.parent_company_id))) return noEdit()
   }
 
   if (isOwnRecord(activeCompanyId, id)) {
     return NextResponse.json({ error: 'You cannot edit your own company\'s record' }, { status: 403 })
   }
 
+  // Identity columns can never be changed from here.
+  for (const k of ['process_id', 'created_at', 'created_by']) delete (fields as any)[k]
   fields.updated_at = new Date().toISOString()
 
   const { data, error } = await supabaseAdmin.from('companies').update(fields).eq('id', id).select().single()
@@ -146,7 +157,6 @@ export async function PATCH(req: NextRequest) {
       const admin = await getRegisteredAdmin()
       if (admin) await sendCompanyReactivated({ to: admin.email, toName: admin.name, companyName, dashboardLink })
     } else {
-        
       const admin = await getRegisteredAdmin()
       if (admin) {
         await sendCompanyInvite({ to: admin.email, toName: admin.name, companyName, dashboardLink, isRegistered: true })

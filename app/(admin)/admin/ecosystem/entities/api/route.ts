@@ -1,17 +1,32 @@
+// GOES IN: app/(admin)/admin/ecosystem/entities/api/route.ts (REPLACES existing file)
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSession } from '@/lib/auth'
 import { sendEntityStatusEmail } from '@/lib/sendEntityStatusEmail'
 import { getActiveCompanyId } from '@/lib/activeCompanyContext'
 import { getFullCompanyRights } from '@/lib/getCompanyRights'
+import { getScopedCompanyIds } from '@/lib/companyScope'
 
-async function hasEntityRight(req: NextRequest, session: any, right: string) {
-  if (session.is_super_admin) return true
+type Rights = Record<string, boolean> | 'all'
+const has = (r: Rights, right: string) => r === 'all' || !!r[right]
+const denied = (msg = 'Not allowed') => NextResponse.json({ error: msg }, { status: 403 })
+
+// The person's rights on the Entities module, read ONCE per request. A Super Admin needs no database read.
+async function entityRights(req: NextRequest, session: any): Promise<Rights> {
+  if (session.is_super_admin) return 'all'
   const activeCompanyId = await getActiveCompanyId(req.cookies)
-  if (!activeCompanyId) return false
-  const rights = await getFullCompanyRights(session.user_id, activeCompanyId)
-  return !!rights['entities']?.[right as keyof typeof rights['entities']]
+  if (!activeCompanyId) return {}
+  return ((await getFullCompanyRights(session.user_id, activeCompanyId))['entities'] as any) || {}
 }
+
+// Hierarchy: a person sees and changes only entities reported to companies inside their own scope (Super Admin: all).
+async function scopedIds(req: NextRequest, session: any): Promise<string[] | null> {
+  if (session.is_super_admin) return null
+  const rawContext = decodeURIComponent(req.cookies.get('orgzify_context')?.value || '')
+  const [ctxType, ctxId] = rawContext.split(':')
+  return getScopedCompanyIds(session, { processId: ctxType === 'company' ? ctxId : undefined, module: 'entities' })
+}
+const inScope = (ids: string[] | null, companyId: string | null) => !ids || (!!companyId && ids.includes(companyId))
 
 // Cosmetic-only URL slug — same rule used everywhere this link is built.
 const slugify = (name: string) => name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
@@ -52,17 +67,18 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') || ''
   const status = searchParams.get('status') || ''
   const reportingCompanyId = searchParams.get('reporting_company_id') || ''
-  const canSeeArchived = await hasEntityRight(req, session, 'can_archive')
+  const scoped = await scopedIds(req, session)
 
   let query = supabaseAdmin.from('entities').select(
     'id, process_id, slug, legal_name, display_name, reporting_company_id, status, is_approved, created_at',
     { count: 'exact' }
   )
+  if (scoped) query = query.in('reporting_company_id', scoped)
 
   if (search) query = query.or(`legal_name.ilike.%${search}%,display_name.ilike.%${search}%,process_id.ilike.%${search}%`)
 
   if (status === 'archived') {
-    if (!canSeeArchived) return NextResponse.json({ error: 'You do not have permission to view archived entities.' }, { status: 403 })
+    if (!has(await entityRights(req, session), 'can_archive')) return denied('You do not have permission to view archived entities.')
     query = query.eq('status', 'archived')
   } else if (status) {
     query = query.eq('status', status)
@@ -98,32 +114,34 @@ export async function PATCH(req: NextRequest) {
   const { id, expected_status, reason_id, reason_note, ...fields } = body
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
+  // One rights read, then the entity must be inside the person's own scope. Anyone else is told it was not found.
+  const rights = await entityRights(req, session)
+  if (!['can_edit', 'can_approve', 'can_activate', 'can_restore'].some(r => has(rights, r))) return denied('You do not have permission to change entities.')
+  const { data: current } = await supabaseAdmin.from('entities').select('status, reporting_company_id').eq('id', id).maybeSingle()
+  if (!current || !inScope(await scopedIds(req, session), current.reporting_company_id)) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
+
   if (fields.action === 'restore') {
-    if (!(await hasEntityRight(req, session, 'can_restore'))) {
-      return NextResponse.json({ error: 'You do not have permission to restore entities.' }, { status: 403 })
-    }
+    if (!has(rights, 'can_restore')) return denied('You do not have permission to restore entities.')
     const { error } = await supabaseAdmin.from('entities')
       .update({ status: 'inactive', previous_status: null, updated_at: new Date().toISOString() }).eq('id', id).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ data: { status: 'inactive' } })
   }
 
-  if (fields.status === 'active' && !(await hasEntityRight(req, session, 'can_activate'))) {
-    return NextResponse.json({ error: 'You do not have permission to activate entities.' }, { status: 403 })
-  }
+  if (fields.status === 'active' && !has(rights, 'can_activate')) return denied('You do not have permission to activate entities.')
+
+  // The owner and the identity columns can never be changed from here.
+  for (const k of ['user_id', 'process_id', 'entity_unique_id', 'created_by', 'created_at']) delete (fields as any)[k]
 
   // Safety check — someone else may have already actioned this entity from
   // the other screen (Entities list vs future Tickets list). If so, we never
   // apply this action twice: we just log it and make sure the ticket is closed.
-  if (fields.status && expected_status) {
-    const { data: current } = await supabaseAdmin.from('entities').select('status').eq('id', id).maybeSingle()
-    if (current && current.status !== expected_status) {
-      await supabaseAdmin.from('entity_review_notes').insert({
-        entity_id: id, action_type: 'conflict', created_by: session.user_id,
-        note: `Attempted to set status to '${fields.status}' but entity was already '${current.status}'.`
-      })
-      return NextResponse.json({ error: 'conflict', current_status: current.status }, { status: 409 })
-    }
+  if (fields.status && expected_status && current.status !== expected_status) {
+    await supabaseAdmin.from('entity_review_notes').insert({
+      entity_id: id, action_type: 'conflict', created_by: session.user_id,
+      note: `Attempted to set status to '${fields.status}' but entity was already '${current.status}'.`
+    })
+    return NextResponse.json({ error: 'conflict', current_status: current.status }, { status: 409 })
   }
 
   if (['rejected', 'suspended', 'blocked'].includes(fields.status) && !reason_id && !reason_note) {
@@ -163,12 +181,10 @@ export async function PATCH(req: NextRequest) {
       entity_id: id, action_type: actionType, reason_id: reason_id || null, note: reason_note || null, created_by: session.user_id
     })
 
-    if (fields.status === 'rejected' || fields.status === 'suspended' || fields.status === 'blocked') {
-      const contact = await getEntityOwnerContact(id)
-      const supportEmail = await getEntitySupportEmail(id)
-      if (contact?.email) {
-        await sendEntityStatusEmail({ to: contact.email, name: contact.name, type: fields.status, reason: reasonLabel, supportEmail })
-      }
+    const contact = await getEntityOwnerContact(id)
+    const supportEmail = await getEntitySupportEmail(id)
+    if (contact?.email) {
+      await sendEntityStatusEmail({ to: contact.email, name: contact.name, type: fields.status, reason: reasonLabel, supportEmail })
     }
   }
 
@@ -182,12 +198,10 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  if (!(await hasEntityRight(req, session, 'can_delete'))) {
-    return NextResponse.json({ error: 'You do not have permission to delete entities.' }, { status: 403 })
-  }
+  if (!has(await entityRights(req, session), 'can_delete')) return denied('You do not have permission to delete entities.')
 
-  const { data: entity } = await supabaseAdmin.from('entities').select('status').eq('id', id).maybeSingle()
-  if (!entity) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
+  const { data: entity } = await supabaseAdmin.from('entities').select('status, reporting_company_id').eq('id', id).maybeSingle()
+  if (!entity || !inScope(await scopedIds(req, session), entity.reporting_company_id)) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
 
   // FUTURE: block delete here if entity has active events or pending
   // payments owed to Orgzify — not built yet (Events/Payments modules pending).
